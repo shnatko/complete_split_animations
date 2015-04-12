@@ -91,6 +91,7 @@
  03.07: first pass snake game
  03.25: for some reason now the ir_on function to turn the ir sense interrupts back on and enable the IR array is now corrupting a bit of the sense_cal_on array.  this makes no sense to me currently but
         there is a workaround in place to simply save the state of the array before the function call and then restore it back.   band-aids work
+ 04.12: a few updates for phone app use
  
 
 animation_number        animation
@@ -124,7 +125,8 @@ TODO:  general code cleanup, add nes controller presence detect, need to add a p
 #include "animations.h"       // header for animation functions/source code
 
 // control overall flow of pgm
-const byte cycle = 1;          // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
+byte cycle = 1;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
+int cycle_time = 15000;	       // time in ms to wait between switching to next animation in sequence
 const byte debug = 0;          // set to 1 to get serial data out for debug
 const byte wifi = 0;           // set to 1 to enable wifi shield
 const byte cal = 0;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
@@ -711,7 +713,7 @@ void loop()  {
   }
 
   // if cycle interval for animation has run it's course, scroll to next animation
-  if ( cycle == 1 && millis() - animationCycleMillis > 15000 ) {
+  if ( cycle == 1 && millis() - animationCycleMillis > cycle_time ) {
     next_animation(99);
     animationCycleMillis = millis();
   }
@@ -1622,6 +1624,13 @@ void printWifiStatus() {
 
 // wifi client, this will be used to process request from wifi for panel control
 void wifi_client() {
+	
+	// android application operates by sending http get request to wifi server with different tokens in the url that the micro controller will parse out and use
+	// current tokens:
+	// *C = color request, set current color of all LEDs on table to provided value
+	// *A = animation request, set table animation to provided animation number
+	// *I = interval request, set table animation interval
+	// *T = animation cycle time, used to tell table to either cycle animations based on a timer or only cycle on table button push
 
   WiFiClient client = server.available();   // listen for incoming clients
 
@@ -1674,12 +1683,12 @@ void wifi_client() {
           }
         }
 
-        // for a brightness request, need to parse out the brightness value from the get string
-        if (currentLine.endsWith("*D")) {
+        // for a color request, need to parse out the brightness value from the get string
+        if (currentLine.endsWith("*C")) {
 
           // grab the index of the brightness token in the string
           byte index_s = currentLine.lastIndexOf(":");
-          byte index_e = currentLine.lastIndexOf("*D");
+          byte index_e = currentLine.lastIndexOf("*C");
           char colorstring[4];
           String brightnessString = currentLine.substring(index_s + 1, index_e);
           int16_t len = brightnessString.length();
@@ -1691,7 +1700,7 @@ void wifi_client() {
             Serial.print("string index of token is: ");
             Serial.println(currentLine.lastIndexOf(":"));
             Serial.print("string index of end token is: ");
-            Serial.println(currentLine.lastIndexOf("*D"));
+            Serial.println(currentLine.lastIndexOf("*C"));
             Serial.print("brightnessString: ");
             Serial.println(brightnessString);
             Serial.print("Colorstring: ");
@@ -1704,30 +1713,71 @@ void wifi_client() {
         // to select current animation
         if (currentLine.endsWith("*A")) {
 
+			// grab the index of the brightness token in the string
+			byte index_s = currentLine.lastIndexOf(":");
+			byte index_e = currentLine.lastIndexOf("*A");
+			char animation[3];
+			String animationString = currentLine.substring(index_s + 1, index_e);
+			//char *colorstring;
+			int16_t len = animationString.length();
+			animationString.toCharArray(animation, len + 1);
+			next_animation(atoi(animation));
 
-          // grab the index of the brightness token in the string
-          byte index_s = currentLine.lastIndexOf(":");
-          byte index_e = currentLine.lastIndexOf("*A");
-          char animation[3];
-          String animationString = currentLine.substring(index_s + 1, index_e);
-          //char *colorstring;
-          int16_t len = animationString.length();
-          animationString.toCharArray(animation, len + 1);
-          next_animation(atoi(animation));
 
-
-          if ( debug == 1 ) {
-            Serial.println(currentLine);
-            Serial.print("string index of token is: ");
-            Serial.println(currentLine.lastIndexOf(":"));
-            Serial.print("string index of end token is: ");
-            Serial.println(currentLine.lastIndexOf("*D"));
-            Serial.print("animationString: ");
-            Serial.println(animationString);
-            Serial.print("animation: ");
-            Serial.println(animation);
-          }
+			if ( debug == 1 ) {
+				Serial.println(currentLine);
+				Serial.print("string index of token is: ");
+				Serial.println(currentLine.lastIndexOf(":"));
+				Serial.print("string index of end token is: ");
+				Serial.println(currentLine.lastIndexOf("*A"));
+				Serial.print("animationString: ");
+				Serial.println(animationString);
+				Serial.print("animation: ");
+				Serial.println(animation);
+			}
         }
+		
+		// to set animation interval
+		if (currentLine.endsWith("*I")) {
+			
+			// grab the index of the brightness token in the string
+			byte index_s = currentLine.lastIndexOf(":");
+			byte index_e = currentLine.lastIndexOf("*I");
+			char interval[4];
+			String animationString = currentLine.substring(index_s + 1, index_e);
+			//char *colorstring;
+			int16_t len = animationString.length();
+			animationString.toCharArray(interval, len + 1);
+			animation_interval = atoi(interval);
+			
+		}
+		
+		// to set animation cycling properties
+		if (currentLine.endsWith("*T")) {
+			
+			// format for string will be /T<TRUE/FALSE>*<cycle time in ms>*T
+			
+			// grab the index of the brightness token in the string
+			byte index_s = currentLine.lastIndexOf("&");
+			byte index_e = currentLine.lastIndexOf("*T");
+			char interval[6];
+			String animationString = currentLine.substring(index_s + 1, index_e);
+			//char *colorstring;
+			int16_t len = animationString.length();
+			animationString.toCharArray(interval, len + 1);
+			cycle_time = atoi(interval);
+			
+			// also parse out state of check box to determine if animations cycling is enabled or not
+			index_s = currentLine.lastIndexOf(":");
+			index_e = currentLine.lastIndexOf("&");
+			animationString = currentLine.substring(index_s + 1, index_e);
+			if ( animationString == "TRUE" ) {
+				cycle = 1;
+			} else {
+				cycle = 0;
+			}
+			
+		}
       }
     }
 
