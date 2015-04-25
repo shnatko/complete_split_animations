@@ -125,18 +125,18 @@ TODO:  general code cleanup, add nes controller presence detect, need to add a p
 #include "animations.h"       // header for animation functions/source code
 
 // control overall flow of pgm
-byte cycle = 1;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
+byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
 int cycle_time = 15000;	       // time in ms to wait between switching to next animation in sequence
 const byte debug = 0;          // set to 1 to get serial data out for debug
-const byte wifi = 0;           // set to 1 to enable wifi shield
+const byte wifi = 1;           // set to 1 to enable wifi shield
 const byte cal = 0;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
 const byte code_array[14] = { 0, 0, 1, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7};
-byte animation_sequence[18] = {1, 2, 3, 4, 5, 6, 7, 8, 11, 99, 9, 99, 99, 99, 14, 99, 0, 99};
+byte animation_sequence[18] = {1, 2, 3, 4, 5, 6, 7, 8, 11, 0, 99, 99, 99, 99, 14, 99, 0, 99};
 
 // wifi stuff
-char ssid[] = "SSID_name";           //  your network SSID (name)
-char pass[] = "network_password";    // your network password
+char ssid[] = "SSID_name";                 //  your network SSID (name)
+char pass[] = "network_password";            // your network password
 int keyIndex = 0;              		 // your network key Index number (needed only for WEP)
 long requestTimer = 0;
 long server_uptime = 0;
@@ -160,11 +160,12 @@ WiFiServer server(80);
 #define NES_latch1   25  //PORTD0                 
 #define NES_data1    24  //PORTA15                
 
-#define NES_clk0     29 //PORTD6       RED 
-#define NES_latch0   28 //PORTD3       ORANGE 
-#define NES_data0    27 //PORTD2       YELLOW 
+#define NES_clk0     29  //PORTD6       RED 
+#define NES_latch0   28  //PORTD3       ORANGE 
+#define NES_data0    27  //PORTD2       YELLOW 
 
-#define NES_clk0_high    REG_PIOD_ODSR = REG_PIOD_ODSR | 0x00000040
+// DUE register manipulation to set GPIO outputs,  should be faster than using arduino macros
+#define NES_clk0_high    REG_PIOD_ODSR = REG_PIOD_ODSR | 0x00000040    
 #define NES_clk0_low     REG_PIOD_ODSR = REG_PIOD_ODSR & 0xFFFFFFFBF
 #define NES_latch0_high  REG_PIOD_ODSR = REG_PIOD_ODSR | 0x00000008
 #define NES_latch0_low   REG_PIOD_ODSR = REG_PIOD_ODSR & 0xFFFFFFF7
@@ -173,7 +174,6 @@ WiFiServer server(80);
 #define NES_clk1_low     REG_PIOD_ODSR = REG_PIOD_ODSR & 0xFFFFFFFFD
 #define NES_latch1_high  REG_PIOD_ODSR = REG_PIOD_ODSR | 0x00000001
 #define NES_latch1_low   REG_PIOD_ODSR = REG_PIOD_ODSR & 0xFFFFFFFE
-
 
 
 #define cycle_button 53         // the pin the input button1 is attached to, will cycle animations ( if interval has expired )
@@ -230,7 +230,7 @@ const int16_t ledCount = 512;     // how many LEDs we dealin' wif
 int16_t shade_compare = 0;        // compare value for brightness testing
 
 // new byte array to store single brightness value for a each pixel, the value will be used to access a lookup table to determine appropriate r.g.b values to send to shift regs
-int16_t display_mem[512];		// main structure to hold LED array color state
+int16_t display_mem[512];			// main structure to hold LED array color state
 byte led_state[512];
 static int16_t *display_ptr0;       // pointer to display array for col0:7
 static int16_t *display_ptr1;       // pointer to display array for col8:15
@@ -277,12 +277,12 @@ PROGMEM prog_uchar lookup_blue[512] =  {   0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4
 byte buttonState = 1;                          // state of current button to cycle animations
 byte lastbuttonState = 0;                      // state of last button check, used for state switching checking
 byte buttonchanged = 0;                        // button edge detected
-unsigned long previousMillis = 0;              // time of last annimation update
+unsigned long previousMillis = 0;              // time of last animation update
 unsigned long buttonPreviousMillis = 0;        // time of last button state switch
-unsigned long nesButtonMillis = 0;             // delay to debounce nes buttons
+unsigned long nesButtonMillis = 0;             // delay to de-bounce nes buttons
 unsigned long animationCycleMillis = 0;        // time of last animation cycle
 byte animation_number = 0;                     // indicator for which animation to play
-int16_t animation_interval = 100;                 // delay before looping though current animation again
+int16_t animation_interval = 100;              // delay before looping though current animation again
 byte random_type = 0;                          // used to randomize the type field for certain animations
 
 // store ir sense data for 128 sensors
@@ -318,9 +318,6 @@ volatile boolean l;
 
 //variables for nes paint animation
 int16_t color = 0;
-byte nes_red = 0;
-byte nes_blue = 0;
-byte nes_green = 0;
 int16_t nes_location = 0;
 byte current_code[14] = {9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9};
 byte last_button = 99;
@@ -730,7 +727,7 @@ void loop()  {
     switch (animation_sequence[animation_number]) {
 		case 0:
 			// "paint" function using NES controller
-			nes_paint(&nes_state1, &last_button, display_mem, rfill_array, ledCount, &color, &nes_red, &nes_green, &nes_blue, &nes_location, current_code, debug, code_array, &animation_number, &animation_interval, tetris_stack, &part_type, &next_part, partstart_y, &gameOver, &previousPauseButtonState, &fall_rate, &score, &color_select );
+			nes_paint(&nes_state1, &last_button, display_mem, rfill_array, ledCount, &color, &nes_location, current_code, debug, code_array, &animation_number, &animation_interval, tetris_stack, &part_type, &next_part, partstart_y, &gameOver, &previousPauseButtonState, &fall_rate, &score, &color_select );
 			break;
 		case 1:
 			// toggle each led in array to full brightness at random intervals for random amounts of time
@@ -909,30 +906,11 @@ void TC0_Handler() {
     pixel_shade2[i] = *display_ptr2;
     pixel_shade3[i] = *display_ptr3;
 
-    // constrain value to 0:511 for functions where we are fading down and may go negative
-    /*
-    if (animation_number == 2 ) {
-
-      if (pixel_shade0[i] < 0 )  {
-        pixel_shade0[i] = 0;
-      }
-      if (pixel_shade1[i] < 0 )  {
-        pixel_shade1[i] = 0;
-      }
-      if (pixel_shade2[i] < 0 )  {
-        pixel_shade1[i] = 0;
-      }
-      if (pixel_shade3[i] < 0 )  {
-        pixel_shade1[i] = 0;
-      }
-    }
-    */
-
-    //lookup shade RGB values from flash lookup table, store to shift_byte to be send to led driver
+    //lookup shade RGB values from flash lookup table, store to shift_byte to be sent to led driver
 
     // col0:7
-    if ( pgm_read_byte_near( &lookup_red[pixel_shade0[i]] )   > shade_compare ) {
-		bitWrite(shift_byte_r0, i, 1);
+    if ( pgm_read_byte_near( &lookup_red[pixel_shade0[i]] )   > shade_compare ) {       // if current display_mem value for r/g/b component is greater than the current
+		bitWrite(shift_byte_r0, i, 1);													// grayscale comparison, the led for this interrupt cycle is on
     }
     if ( pgm_read_byte_near( &lookup_green[pixel_shade0[i]] ) > shade_compare ) {
 		bitWrite(shift_byte_g0, i, 1);
@@ -1662,8 +1640,7 @@ void wifi_client() {
             // break out of the while loop:
             client.println("HTTP/1.0 200 OK");
             client.println("Content-type:text/html");
-            client.println();
-            // The HTTP response ends with another blank line:
+		    // The HTTP response ends with another blank line:
             client.println();
             break;
           } else {      // if you got a newline, then clear currentLine:
@@ -1744,11 +1721,23 @@ void wifi_client() {
 			byte index_s = currentLine.lastIndexOf(":");
 			byte index_e = currentLine.lastIndexOf("*I");
 			char interval[4];
-			String animationString = currentLine.substring(index_s + 1, index_e);
+			String intervalString = currentLine.substring(index_s + 1, index_e);
 			//char *colorstring;
-			int16_t len = animationString.length();
-			animationString.toCharArray(interval, len + 1);
+			int16_t len = intervalString.length();
+			intervalString.toCharArray(interval, len + 1);
 			animation_interval = atoi(interval);
+			
+			if ( debug == 1 ) {
+				Serial.println(currentLine);
+				Serial.print("string index of token is: ");
+				Serial.println(currentLine.lastIndexOf(":"));
+				Serial.print("string index of end token is: ");
+				Serial.println(currentLine.lastIndexOf("*I"));
+				Serial.print("inervalString: ");
+				Serial.println(intervalString);
+				Serial.print("interval: ");
+				Serial.println(interval);
+			}
 			
 		}
 		

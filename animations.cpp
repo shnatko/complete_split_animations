@@ -39,7 +39,7 @@
 
 // #################################################################
 // 0: paint using nes controller
-void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_mem, int16_t *rfill_array, int16_t ledCount, int16_t *color, byte *nes_red, byte *nes_green, byte *nes_blue, int16_t *nes_location, byte *current_code, byte debug, const byte *code_array, byte *animation_number, int16_t *animation_interval, byte *tetris_stack, byte *part_type, byte *next_part, byte partstart_y, byte *gameOver, byte *previousPauseButtonState, int16_t *fall_rate, int16_t *score, byte *color_select ) {
+void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_mem, int16_t *rfill_array, int16_t ledCount, int16_t *color, int16_t *nes_location, byte *current_code, byte debug, const byte *code_array, byte *animation_number, int16_t *animation_interval, byte *tetris_stack, byte *part_type, byte *next_part, byte partstart_y, byte *gameOver, byte *previousPauseButtonState, int16_t *fall_rate, int16_t *score, byte *color_select ) {
 
   // grab current NES control button state
   byte up, down, left, right, a, b, sel, start = 1;
@@ -175,7 +175,7 @@ void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_me
 
   }
 
-  if ( debug == 1 ) {
+  if ( debug == 2 ) {
 	for ( byte i=0; i<14; i++ ) {
 		Serial.print(current_code[i]);
 	}

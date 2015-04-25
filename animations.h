@@ -33,7 +33,7 @@
 // grrr the compiler doesn't know what a byte is...
 typedef unsigned char byte;
 
-void nes_paint(volatile byte*, byte*, int16_t*, int16_t*, int16_t, int16_t*, byte*, byte*, byte*, int16_t*, byte*, byte, const byte*, byte*, int16_t*, byte*, byte*, byte*, byte, byte*, byte*, int16_t*, int16_t*, byte* );
+void nes_paint(volatile byte*, byte*, int16_t*, int16_t*, int16_t, int16_t*, int16_t*, byte*, byte, const byte*, byte*, int16_t*, byte*, byte*, byte*, byte, byte*, byte*, int16_t*, int16_t*, byte* );
 void blink_rand_interval(byte, byte*, int16_t, int16_t*, int16_t*, int16_t*, byte, int16_t* );
 void bounce(byte, int16_t*, byte, byte*, byte*, byte*, byte*, byte*, byte*, byte*, int16_t*, byte*, int16_t, byte, int16_t*);
 void pong(int16_t*, int16_t, byte, int16_t*, byte*, int16_t*, byte*, byte*, byte*, byte*, byte*, byte*, byte*, int16_t*, byte);
