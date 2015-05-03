@@ -92,7 +92,7 @@
  03.25: for some reason now the ir_on function to turn the ir sense interrupts back on and enable the IR array is now corrupting a bit of the sense_cal_on array.  this makes no sense to me currently but
         there is a workaround in place to simply save the state of the array before the function call and then restore it back.   band-aids work
  04.12: a few updates for phone app use
- 
+ 05.01: added game of life animation
 
 animation_number        animation
 0                       nes_paint
@@ -112,6 +112,7 @@ animation_number        animation
 13						serial control
 14                      it's a secret to everyone.  not really, it's just tetris
 15                      snake
+16						life
 
 
 TODO:  general code cleanup, add nes controller presence detect, need to add a pull up/down resistor on data input to read value when controller is not plugged in
@@ -128,11 +129,11 @@ TODO:  general code cleanup, add nes controller presence detect, need to add a p
 byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
 int cycle_time = 15000;	       // time in ms to wait between switching to next animation in sequence
 const byte debug = 0;          // set to 1 to get serial data out for debug
-const byte wifi = 1;           // set to 1 to enable wifi shield
+const byte wifi = 0;           // set to 1 to enable wifi shield
 const byte cal = 0;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
 const byte code_array[14] = { 0, 0, 1, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7};
-byte animation_sequence[18] = {1, 2, 3, 4, 5, 6, 7, 8, 11, 0, 99, 99, 99, 99, 14, 99, 0, 99};
+byte animation_sequence[18] = {1, 2, 16, 4, 5, 6, 7, 8, 11, 0, 99, 99, 99, 99, 14, 99, 0, 99};
 
 // wifi stuff
 char ssid[] = "SSID_name";                 //  your network SSID (name)
@@ -434,6 +435,10 @@ int16_t food1 = 0;
 int16_t food2 = 0;
 byte foodmode = 1;
 
+// vars for life
+byte gamestate[512];
+int iteration = 0;
+
 // the setup routine runs once when you press reset:
 void setup()  {
 
@@ -695,6 +700,11 @@ void loop()  {
   } else if ( bitRead(nes_state1, 3) == 1 && previousPauseButtonState == 0 ) {  // button is released
     previousPauseButtonState = 1;
   }
+  
+  // only certain animations can be paused with the start button, for non-pausable animations, clear the pause button back to zero, also clear gameOver for non-tetris modes
+  if ( animation_sequence[animation_number] != 14 && animation_sequence[animation_number] != 15 ) pauseState = 0;
+  if ( animation_sequence[animation_number] != 14 ) gameOver = 0;
+  
 
   // user can start new tetris game by pressing start when current game is over
   if ( animation_sequence[animation_number] == 14 && gameOver == 1 && bitRead(nes_state1, 3) == 0 ) {
@@ -719,7 +729,7 @@ void loop()  {
   if ( wifi == 1 ) wifi_client();
 
   // main loop,  if animation interval has expired, make another call to selected animation function
-  if ( animation_sequence[animation_number] < 14 && millis() - previousMillis > animation_interval || ( animation_sequence[animation_number] >= 14 && millis() - previousMillis > animation_interval && pauseState == 0 && gameOver == 0 ) ) {
+  if ( millis() - previousMillis > animation_interval && pauseState == 0 && gameOver == 0 ) {
 
     previousMillis = millis();
 
@@ -807,6 +817,10 @@ void loop()  {
 		case 15:
 			snake(&players, &score, display_mem, ledCount, nes_state1, nes_state0, snake1, snake2, &dir1, &dir2, &dead1, &dead2, &food1, &food2, &foodmode, snakeLength, &animation_interval, debug);
 			break;
+		case 16:
+			life(&random_type, &iteration, display_mem, ledCount, gamestate, nes_state1, &animation_interval, debug);
+			//void life(byte type, int *iteration, int16_t *display_mem, int16_t ledCount, int16_t *gamestate, byte nes_state1, int16_t *animation_interval, byte debug) {
+
     }
 
     // comment out below, used to time interrupt cycle for testing
@@ -1421,6 +1435,15 @@ void next_animation(byte switchto) {
 		foodmode = 0;  // one pellet mode
 		newFood(snake1, snake2, snakeLength, &food1, &food2, foodmode, 0 );
 		animation_interval = 100;
+		break;
+		
+	case 16:
+
+		// life
+		nes_on();
+		random_type = random(0, 2);
+		animation_interval = 50;
+		init_life(gamestate, &iteration, ledCount);
 		break;
 	}
 }

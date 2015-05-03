@@ -50,6 +50,8 @@ void stopwatch(byte, long*, long*, long*, byte*, int16_t*, byte, byte);
 void serial_control(int16_t*, int16_t*, int16_t, int16_t);
 void tetris(byte*, byte*, byte*, byte*, byte*, unsigned long*, int16_t*, byte*, byte*, byte*, byte*, int16_t*, int16_t*, int16_t, byte, unsigned long*, byte);
 void snake(byte*, int16_t*, int16_t*, int16_t, byte, byte, int16_t*, int16_t*, byte*, byte*, byte*, byte*, int16_t*, int16_t*, byte*, const byte, int16_t*, byte);
+void life(byte*, int*, int16_t*, int16_t, byte*, byte, int16_t*, byte);
+
 
 
 
@@ -71,11 +73,11 @@ void draw_row(byte, int16_t, int16_t*, byte);
 void draw_col(byte, int16_t, int16_t*, byte);
 int16_t opposite_color(int16_t);
 int16_t paint_choose(int16_t*, int16_t*, volatile byte*, int16_t, byte*, int16_t*, byte*, byte*, byte*, const byte*, byte);
-
 void updateSnakes(int16_t*, byte, int16_t*, byte, const byte, byte);
 void drawSnakes(int16_t*, int16_t*, int16_t*, int16_t, const byte, int16_t, int16_t, byte);
 void checkSnakes(int16_t*, int16_t*, byte, byte*, byte*, int16_t*, int16_t*, byte, byte);
 void newFood(int16_t*, int16_t*, const byte, int16_t*, int16_t*, byte, byte);
+void init_life(byte*, int*, int16_t);
  
 
 #endif

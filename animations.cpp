@@ -25,12 +25,14 @@
    13					   serial control
    14                      it's a secret to everyone
    15                      snake
+   16                      life
   
     Date      Comment
     02.21.15  Created initial version and moved some animations over 
     02.22.15  PITA but moved all the animations over to own source file for better code maintenance 
     03.07.15  First pass at getting snake game working
-	04.02.15  Snake improvements, 2 players, border wrap added
+	  04.02.15  Snake improvements, 2 players, border wrap added
+    05.01.15  Added game of life
 */
 
 #include "animations.h"
@@ -2846,6 +2848,152 @@ void snake(byte *players, int16_t *score, int16_t *display_mem, int16_t ledCount
 
 
 
+/*
+    Any live cell with fewer than two live neighbours dies, as if caused by under-population.
+    Any live cell with two or three live neighbours lives on to the next generation.
+    Any live cell with more than three live neighbours dies, as if by overcrowding.
+    Any dead cell with exactly three live neighbours becomes a live cell, as if by reproduction.
+*/
+
+// #################################################################
+// 15: life
+void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, byte *gamestate, byte nes_state1, int16_t *animation_interval, byte debug) {
+
+  // grab nes input states to determine snake movement
+  byte up1, down1, left1, right1, a1, b1, sel1, start1 = 1;
+  
+  up1 = bitRead(nes_state1, 4);
+  down1 = bitRead(nes_state1, 5);
+  left1 = bitRead(nes_state1, 6);
+  right1 = bitRead(nes_state1, 7);
+  a1 = bitRead(nes_state1, 0);
+  b1 = bitRead(nes_state1, 1);
+  sel1 = bitRead(nes_state1, 2);
+  start1 = bitRead(nes_state1, 3);
+
+  byte newState[512];  // temp array to hold the newly calculated state for the current location
+  byte currentRow = 0;
+  byte currentCol = 0;
+  byte adjacentAlive = 0;
+
+  // loop though gamestate and count # of adjacent cells to the current cell that are alive
+  for ( int16_t i=0; i<ledCount; i++) {
+
+    // calc row/column
+    currentRow = i/32;
+    currentCol = i%32;
+	adjacentAlive = 0;
+	
+	if ( debug == 2 ) {
+		
+		String debugString = "led: ";
+		debugString = String(debugString + i + " R/C: " + currentRow + "/" + currentCol );
+		Serial.println(debugString);
+	}
+	
+
+    // check all 8 possible adjacent cells for life and count # of alive adjact to current cell
+    if ( currentRow > 0 && currentCol > 0 ) {
+      if ( gamestate[i-33] == 1 ) adjacentAlive++;  
+    }
+
+    if ( currentRow > 0 ) {
+      if ( gamestate[i-32] == 1 ) adjacentAlive++;
+    }
+
+    if ( currentRow > 0 && currentCol < 31 ) {
+      if ( gamestate[i-31] == 1 ) adjacentAlive++;
+    }
+
+    if ( currentCol > 0 ) {
+      if ( gamestate[i-1] == 1 ) adjacentAlive++;
+    }
+
+    if ( currentCol < 31 ) {
+      if ( gamestate[i+1] == 1 ) adjacentAlive++;
+    }
+
+    if ( currentRow < 15 && currentCol > 0 ) {
+      if ( gamestate[i+31] == 1 ) adjacentAlive++;
+    }
+
+    if ( currentRow < 15 ) {
+      if ( gamestate[i+32] == 1 ) adjacentAlive++;
+    }
+
+    if ( currentRow < 15 && currentCol < 31 ) {
+      if ( gamestate[i+33] == 1 ) adjacentAlive++;
+    }
+
+    // once adjacent number of alive cells has been determined, update the newState array with the new state of the current cell
+    newState[i] = 0;
+
+    if (gamestate[i] == 0 ) {                     // current cell is dead, if has exactly 3 alive neighbors, reproduce
+      if ( adjacentAlive == 3 ) newState[i] = 1;
+    } else {                                      // curent cell is alive, determine next state based on neighbors
+
+    newState[i] = 1;
+    if ( adjacentAlive < 2 || adjacentAlive > 3 ) newState[i] = 0;
+
+    }
+
+  }
+
+  // now that newState of array has been determined, copy it over to the current gamestate and then update the display_mem
+  for ( int16_t i = 0; i < ledCount; i++ ){
+    gamestate[i] = newState[i];
+		
+	if ( debug == 1 ) {
+		String debugString = "gamestate[";
+		debugString = String(debugString + i + "]: " + gamestate[i]);
+		Serial.println(debugString);
+	
+	}
+	
+    display_mem[i] = 0;
+	
+	if (*type == 0 ) {
+		if ( gamestate[i] == 1 ) display_mem[i] = 448;
+	} else if ( *type == 1 ) {
+		if ( gamestate[i] == 1 ) display_mem[i] = random(0,512);
+	}
+  }
+
+
+  // increment iteration
+  *iteration = *iteration + 1;
+  
+  if ( *iteration > 400 ) {
+	init_life(gamestate, iteration, ledCount);
+  }
+
+  //lastly check NES state for modifcations
+
+  if ( a1 == 0 ) {
+    *animation_interval = *animation_interval - 5;
+    *animation_interval = constrain(*animation_interval, 10, 250);
+  }
+
+  if ( b1 == 0 ) {
+    *animation_interval = *animation_interval + 5;
+    *animation_interval = constrain(*animation_interval, 10, 250);
+  }
+
+  if ( start1 == 0 ) {
+    init_life(gamestate, iteration, ledCount);
+  }
+  
+  if ( sel1 == 0 ) {
+	if ( *type == 0 ) {
+		*type = 1;
+	} else {
+		*type = 0;
+	}
+  }
+
+}
+
+
 
 // ********************************************************  helpers *************************************************************************
 // display hello message at startup/reset
@@ -3781,5 +3929,40 @@ void newFood(int16_t *snake1, int16_t *snake2, byte snakeLength, int16_t *food1,
   }   
 }
 
+// ************************
+// randomize gamestate for life
+void init_life(byte *gamestate, int *iteration, int16_t ledCount) {
+
+  
+  byte weight = random(2, 4);
+  byte newval = 0;
+  *iteration = 0;
+  
+  for ( int16_t i = 0; i < ledCount; i++ ){
+    newval = random(0, weight);
+	
+	switch (newval) {
+		
+		case 0:
+		gamestate[i] = 1;
+		break;
+		
+		case 1:
+		gamestate[i] = 0;
+		break;
+		
+		case 2:
+		gamestate[i] = 0;
+		break;
+		
+		case 3:
+		gamestate[i] = 0;
+		break;
+		
+	}
+	
+  }
+
+}
 
 
