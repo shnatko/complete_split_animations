@@ -818,7 +818,7 @@ void loop()  {
 			snake(&players, &score, display_mem, ledCount, nes_state1, nes_state0, snake1, snake2, &dir1, &dir2, &dead1, &dead2, &food1, &food2, &foodmode, snakeLength, &animation_interval, debug);
 			break;
 		case 16:
-			life(&random_type, &iteration, display_mem, ledCount, gamestate, nes_state1, &animation_interval, debug);
+			life(&random_type, &iteration, display_mem, ledCount, gamestate, nes_state1, &animation_interval, wave_color, debug);
 			//void life(byte type, int *iteration, int16_t *display_mem, int16_t ledCount, int16_t *gamestate, byte nes_state1, int16_t *animation_interval, byte debug) {
 
     }
@@ -1443,7 +1443,8 @@ void next_animation(byte switchto) {
 		nes_on();
 		random_type = random(0, 2);
 		animation_interval = 50;
-		init_life(gamestate, &iteration, ledCount);
+		wave_color[0] = random(1,512);
+		init_life(gamestate, &iteration, ledCount, wave_color);
 		break;
 	}
 }

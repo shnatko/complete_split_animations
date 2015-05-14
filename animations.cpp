@@ -31,7 +31,7 @@
     02.21.15  Created initial version and moved some animations over 
     02.22.15  PITA but moved all the animations over to own source file for better code maintenance 
     03.07.15  First pass at getting snake game working
-	  04.02.15  Snake improvements, 2 players, border wrap added
+	04.02.15  Snake improvements, 2 players, border wrap added
     05.01.15  Added game of life
 */
 
@@ -279,7 +279,7 @@ void bounce(byte type, int16_t *display_mem, byte balls, byte *location_x, byte 
 
   /*  type info:
       type = 0, single pixels bouncing around, if count < 25, fade down, otherwise just clear previous position
-      type = 1, use shape setting, shapes so far inclue doughnut, circle, and square, no fade, just clear prev. position
+      type = 1, use shape setting, shapes so far include doughnut, circle, and square, no fade, just clear prev. position
       type = 2, use shape setting, but persistence setting, no clear
       type = 3, use shape setting, but fade down shape after moving it
   */
@@ -2857,9 +2857,9 @@ void snake(byte *players, int16_t *score, int16_t *display_mem, int16_t ledCount
 
 // #################################################################
 // 15: life
-void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, byte *gamestate, byte nes_state1, int16_t *animation_interval, byte debug) {
+void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, byte *gamestate, byte nes_state1, int16_t *animation_interval, int16_t *wave_color, byte debug) {
 
-  // grab nes input states to determine snake movement
+  // grab nes input states 
   byte up1, down1, left1, right1, a1, b1, sel1, start1 = 1;
   
   up1 = bitRead(nes_state1, 4);
@@ -2892,7 +2892,7 @@ void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, by
 	}
 	
 
-    // check all 8 possible adjacent cells for life and count # of alive adjact to current cell
+    // check all 8 possible adjacent cells for life and count # of alive adjacent to current cell
     if ( currentRow > 0 && currentCol > 0 ) {
       if ( gamestate[i-33] == 1 ) adjacentAlive++;  
     }
@@ -2928,9 +2928,9 @@ void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, by
     // once adjacent number of alive cells has been determined, update the newState array with the new state of the current cell
     newState[i] = 0;
 
-    if (gamestate[i] == 0 ) {                     // current cell is dead, if has exactly 3 alive neighbors, reproduce
+    if (gamestate[i] == 0 ) {                     // current cell is dead, if has exactly 3 alive neighbours, reproduce
       if ( adjacentAlive == 3 ) newState[i] = 1;
-    } else {                                      // curent cell is alive, determine next state based on neighbors
+    } else {                                      // current cell is alive, determine next state based on neighbours
 
     newState[i] = 1;
     if ( adjacentAlive < 2 || adjacentAlive > 3 ) newState[i] = 0;
@@ -2953,7 +2953,7 @@ void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, by
     display_mem[i] = 0;
 	
 	if (*type == 0 ) {
-		if ( gamestate[i] == 1 ) display_mem[i] = 448;
+		if ( gamestate[i] == 1 ) display_mem[i] = wave_color[0];
 	} else if ( *type == 1 ) {
 		if ( gamestate[i] == 1 ) display_mem[i] = random(0,512);
 	}
@@ -2963,11 +2963,12 @@ void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, by
   // increment iteration
   *iteration = *iteration + 1;
   
-  if ( *iteration > 400 ) {
-	init_life(gamestate, iteration, ledCount);
+  // reset after 250 iterations.  usually at this point the board is in a static state
+  if ( *iteration > 250 ) {
+	init_life(gamestate, iteration, ledCount, wave_color);
   }
 
-  //lastly check NES state for modifcations
+  //lastly check NES state for button presses
 
   if ( a1 == 0 ) {
     *animation_interval = *animation_interval - 5;
@@ -2980,7 +2981,7 @@ void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, by
   }
 
   if ( start1 == 0 ) {
-    init_life(gamestate, iteration, ledCount);
+    init_life(gamestate, iteration, ledCount, wave_color);
   }
   
   if ( sel1 == 0 ) {
@@ -2989,6 +2990,10 @@ void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, by
 	} else {
 		*type = 0;
 	}
+  }
+  
+  if ( up1 == 0 ) {
+	wave_color[0] = random(1,512);	
   }
 
 }
@@ -3931,7 +3936,7 @@ void newFood(int16_t *snake1, int16_t *snake2, byte snakeLength, int16_t *food1,
 
 // ************************
 // randomize gamestate for life
-void init_life(byte *gamestate, int *iteration, int16_t ledCount) {
+void init_life(byte *gamestate, int *iteration, int16_t ledCount, int16_t *wave_color) {
 
   
   byte weight = random(2, 4);
@@ -3962,6 +3967,8 @@ void init_life(byte *gamestate, int *iteration, int16_t ledCount) {
 	}
 	
   }
+  
+  wave_color[0] = random(1,512);
 
 }
 
