@@ -93,6 +93,7 @@
         there is a workaround in place to simply save the state of the array before the function call and then restore it back.   band-aids work
  04.12: a few updates for phone app use
  05.01: added game of life animation
+ 05.17: start of maze generator / solver animation
 
 animation_number        animation
 0                       nes_paint
@@ -113,6 +114,7 @@ animation_number        animation
 14                      it's a secret to everyone.  not really, it's just tetris
 15                      snake
 16						life
+17						maze
 
 
 TODO:  general code cleanup, add nes controller presence detect, need to add a pull up/down resistor on data input to read value when controller is not plugged in
@@ -133,7 +135,7 @@ const byte wifi = 0;           // set to 1 to enable wifi shield
 const byte cal = 0;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
 const byte code_array[14] = { 0, 0, 1, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7};
-byte animation_sequence[18] = {1, 2, 16, 4, 5, 6, 7, 8, 11, 0, 99, 99, 99, 99, 14, 99, 0, 99};
+byte animation_sequence[18] = {1, 17, 16, 4, 5, 6, 7, 8, 11, 0, 99, 99, 99, 99, 14, 99, 0, 99};
 
 // wifi stuff
 char ssid[] = "SSID_name";                 //  your network SSID (name)
@@ -436,8 +438,18 @@ int16_t food2 = 0;
 byte foodmode = 1;
 
 // vars for life
-byte gamestate[512];
-int iteration = 0;
+byte gamestate[512];				// state of the game board, each cell is alive(1) or dead(0)
+int iteration = 0;					// current generation
+
+// vars for maze
+byte maze_nodes[105];				// board broken down into 105 nodes to create the maze in by removing walls between nodes, node state is either visited or not
+byte maze_walls[188];				// there are 188 walls between all the nodes, wall state is either there or not
+int16_t current_cell = 0;			// current cell being tracked for generation/solving algorithm
+byte nodestack[105];				// array to use as lifo to track visited nodes as maze is travered
+char stack_index = 0;				// ptr to top of nodestack ( array location of last "pushed" node )
+byte startnode = 0;
+byte endnode = 104;				
+
 
 // the setup routine runs once when you press reset:
 void setup()  {
@@ -819,7 +831,12 @@ void loop()  {
 			break;
 		case 16:
 			life(&random_type, &iteration, display_mem, ledCount, gamestate, nes_state1, &animation_interval, wave_color, debug);
-			//void life(byte type, int *iteration, int16_t *display_mem, int16_t ledCount, int16_t *gamestate, byte nes_state1, int16_t *animation_interval, byte debug) {
+			break;
+		case 17: 
+			// maze, currently does nothing, eventually have solver called here
+			init_maze(maze_nodes, maze_walls, nodestack, &stack_index, ledCount, display_mem, &current_cell, wave_color, debug);
+			break;
+		
 
     }
 
@@ -1441,11 +1458,22 @@ void next_animation(byte switchto) {
 
 		// life
 		nes_on();
-		random_type = random(0, 2);
+		random_type = random(0, 3);
 		animation_interval = 50;
 		wave_color[0] = random(1,512);
 		init_life(gamestate, &iteration, ledCount, wave_color);
 		break;
+		
+	case 17:
+	
+		// maze
+		nes_on();
+		random_type = random(0,2);
+		animation_interval = 2000;
+		wave_color[0] = random(1,512);
+		//wave_color[0] = 64;
+		init_maze(maze_nodes, maze_walls, nodestack, &stack_index, ledCount, display_mem, &current_cell, wave_color, debug);
+	
 	}
 }
 

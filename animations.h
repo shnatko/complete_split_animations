@@ -12,14 +12,16 @@
    4                       random fill, unfill of display, random or fixed color
    5                       random led on fade off
    6                       wave   
-   7			   line sweeper
+   7			   		   line sweeper
    8                       chaser
    9                       ir sense
    10                      text scroll
    11                      "sprite" animate
    12                      stopwatch
-   13		           serial control
+   13		               serial control
    15                      it's a secret to everyone
+   16					   life
+   17					   maze
    
    
 */
@@ -78,6 +80,10 @@ void drawSnakes(int16_t*, int16_t*, int16_t*, int16_t, const byte, int16_t, int1
 void checkSnakes(int16_t*, int16_t*, byte, byte*, byte*, int16_t*, int16_t*, byte, byte);
 void newFood(int16_t*, int16_t*, const byte, int16_t*, int16_t*, byte, byte);
 void init_life(byte*, int*, int16_t, int16_t*);
- 
+void init_maze(byte*, byte*, byte*, char*, int16_t, int16_t*, int16_t*, int16_t*, byte);
+void maze_gen(int16_t*, byte*, byte*, byte*, char*, byte);
+byte checkMazeNodes(byte*);
+
+
 
 #endif

@@ -2952,12 +2952,14 @@ void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, by
 	
     display_mem[i] = 0;
 	
-	if (*type == 0 ) {
+	if (*type == 0 || *type == 1 ) {
 		if ( gamestate[i] == 1 ) display_mem[i] = wave_color[0];
-	} else if ( *type == 1 ) {
+	} else if ( *type == 2 ) {
 		if ( gamestate[i] == 1 ) display_mem[i] = random(0,512);
 	}
   }
+  
+  if ( *type == 1 ) wave_color[0] = random(1,512);
 
 
   // increment iteration
@@ -2985,11 +2987,7 @@ void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, by
   }
   
   if ( sel1 == 0 ) {
-	if ( *type == 0 ) {
-		*type = 1;
-	} else {
-		*type = 0;
-	}
+	*type = random(0,3);
   }
   
   if ( up1 == 0 ) {
@@ -3972,4 +3970,234 @@ void init_life(byte *gamestate, int *iteration, int16_t ledCount, int16_t *wave_
 
 }
 
+// ************************
+// randomize maze board before trying to solve it
+void init_maze(byte *maze_nodes, byte *maze_walls, byte *nodestack, char *stack_index, int16_t ledCount, int16_t *display_mem, int16_t *current_cell, int16_t *wave_color, byte debug) {
+	
+	// when the init_maze function is called, the board will be cleared and a new random maze will be generated via a depth first search algorithm across the 105 node / 188 wall space
+	
+	// first clear current state of the array
+	clear_all(0, ledCount, display_mem);
+	*current_cell = 0;
+	wave_color[0] = random(1,512);
+	
+	// reset the node array to every cell as unvisited and every wall as in place
+	for ( byte i = 0; i < 188; i++ ) {
+		
+		if ( i < 105 ) {
+			maze_nodes[i] = 1;
+			nodestack[i] = 110;
+		}
+		
+		maze_walls[i] = 1;
+		
+	}
+	
+	// TODO: add recursive algorithm to traverse space to generate maze, for now just draw grid
+	maze_gen(current_cell, maze_nodes, maze_walls, nodestack, stack_index, debug);
+	
+	
+	// now that the maze has been calculated, actually draw it.
+	
+		
+	// draw the boards rows and columns followed by removal of the node walls based on the calculated wall state from above
+	for ( byte i = 0; i < 31; i=i+2 ) {
+		
+		draw_col(i, wave_color[0], display_mem, 16 );
+		
+		if ( i < 15 ) draw_row(i, wave_color[0], display_mem, 32 );
+		
+	}
+	
+	//also add unused borders, row15 and column31
+	draw_row(15, 0, display_mem, 32 );	
+	draw_col(31, 0, display_mem, 16 );
+	
+	// now traverse though wall array and remove any zero'd walls
+	byte wall_row = 0;
+	byte wall_col = 0;
+	
 
+	// for debug only, randomly remove some wall locations to check if the board is being drawn correclty still
+	//for ( byte i = 0; i<50; i++ ){
+	//	maze_walls[random(0,188)] = 0;
+	//}
+	
+	
+	for ( byte i=0; i < 188; i++ ) {
+		
+		// calc wall row/col to determine LED position in matrix and then if current wall is not set, clear corresponding LED in matrix
+		
+		//wall_col = i%14;
+		
+		if( i < 98 ) {
+			wall_row = i / 14;
+			wall_col = i % 14;
+			if(maze_walls[i] == 0 ) display_mem[34 + (2*wall_row*32) + (2*wall_col)] = 0;    // wall locations < 98 are vertical walls on the sides of nodes
+			
+		} else {
+			wall_row = (i-98) % 6;
+			wall_col = (i-98) / 6;
+			//wall_row = (i/14) - 7;
+			if (maze_walls[i] == 0 ) display_mem[65 + (2*wall_row*32) + (2*wall_col)] = 0;	 // wall locations > 97 are horizontal walls on the top/bottom of nodes
+		}
+		
+	} 
+	
+	// remove start and end node edges
+	// fixed start and end nodes for now
+	display_mem[32] = 0;
+	display_mem[446] = 0;
+	
+	
+}
+
+// ************************
+// recursive function to generate random maze board by depth first search of unvisited nodes from current cell
+
+/*
+    Make the initial cell the current cell and mark it as visited
+    While there are unvisited cells
+        If the current cell has any neighbours which have not been visited
+            Choose randomly one of the unvisited neighbours
+            Push the current cell to the stack
+            Remove the wall between the current cell and the chosen cell
+            Make the chosen cell the current cell and mark it as visited
+        Else if stack is not empty
+            Pop a cell from the stack
+            Make it the current cell
+        Else
+            Pick a random unvisited cell, make it the current cell and mark it as visited
+*/
+void maze_gen(int16_t *current_cell, byte *maze_nodes, byte *maze_walls, byte *nodestack, char *stack_index, byte debug ) {
+	
+	// check nodes to see if any are still unvisited
+	byte unvisited = checkMazeNodes(maze_nodes);
+	
+	// if there are, do the whole traverse thing
+	if ( unvisited == 0 ) {
+	
+		// calc row and column for current node
+		byte node_row = *current_cell / 15;
+		byte node_col = *current_cell % 15;
+		byte neighbors[4] = {110,110,110,110};  // 110 indicated no valid or visited neighbor, index 0 = upper, 1 = lower, 2 = left, 3 = right
+		
+		// first mark the current cell as visited
+		maze_nodes[*current_cell] = 0;
+			
+		// find current cells neighbors  and check if any of them have not yet been visited
+	
+		// check upper neighbor
+		if ( node_row > 0 ) {
+			if ( maze_nodes[*current_cell - 15 ] == 1 ) {
+				neighbors[0] = *current_cell - 15;
+				unvisited++;
+			}
+		}
+		
+		// check lower neighbor
+		if ( node_row < 6 ) {
+			if ( maze_nodes[*current_cell + 15 ] == 1 ) {
+				neighbors[1] = *current_cell + 15;
+				unvisited++;
+			}
+		}
+		
+		// check left neighbor
+		if ( node_col > 0 ) {
+			if ( maze_nodes[*current_cell - 1 ] == 1 ) {
+				neighbors[2] = *current_cell - 1;
+				unvisited++;
+			}
+		}
+		
+		// check right neighbor
+		if ( node_col < 14 ) {
+			if ( maze_nodes[*current_cell + 1 ] == 1 ) {
+				neighbors[3] = *current_cell + 1;
+				unvisited++;
+			}
+		}
+		
+		// now randomly select a neighbor cell and if neighbor exists and if it has been checked yet, if it both exists and has not been checked, remove wall between cells recursively 	
+		if ( unvisited > 0 ) {
+			byte next_cell = random(0,4);
+			
+			// we know at least one neighbor is unvisited, keep searching for it
+			while( neighbors[next_cell] == 110 ) {
+				next_cell = random(0,4);
+			}
+			
+			// once found, now the magic happens, mark wall between 2 cells as gone, make neighbor cell the current cell and call maze_gen with new current cell so process can repeat
+				
+			if ( debug == 1 ) {
+				Serial.print("current_cell: ");
+				Serial.print(*current_cell);
+				Serial.print("  next_cell: ");
+				Serial.print(neighbors[next_cell]);
+				Serial.print("  remove wall: ");
+				
+			}
+		
+			// wall to remove depends on if neighbor is upper, lower, left or right (next_cell value )
+			switch (next_cell) {
+				
+					case 0:		// upper wall
+					maze_walls[97 + (6*node_col) + node_row] = 0;
+					if ( debug == 1 ) Serial.println(97 + (6*node_col) + node_row);
+					break;
+				
+				case 1:		// lower wall
+					maze_walls[98 + (6*node_col) + node_row] = 0;
+					if ( debug == 1 ) Serial.println(98 + (6*node_col) + node_row);
+					break;
+				
+				case 2: 	// left wall
+					maze_walls[*current_cell - (node_row+1)] = 0;
+					if ( debug == 1 ) Serial.println(*current_cell - (node_row+1));
+					break;
+				
+				case 3: 	// right wall
+					maze_walls[*current_cell - node_row] = 0;
+					if ( debug == 1 ) Serial.println(*current_cell - node_row);
+					break;
+			}
+			
+			// now update current cell to new neighbor cell and call maze_gen again with new neighbor
+			
+			// push current cell to stack
+			nodestack[*stack_index] = *current_cell;
+			*stack_index = *stack_index + 1;
+			
+			*current_cell = neighbors[next_cell];
+			
+			maze_gen(current_cell, maze_nodes, maze_walls, nodestack, stack_index, debug);	
+			
+		} else {
+			// no unvisited cells in at current cell location, pop cell from stack and use as next current cell, this will work backwards through the traversed nodes until one with neighbors is found
+			
+			if ( *stack_index > 0 ) {
+				*stack_index = *stack_index - 1;
+				*current_cell = nodestack[*stack_index];
+				nodestack[*stack_index] = 110;
+				
+				maze_gen(current_cell, maze_nodes, maze_walls, nodestack, stack_index, debug );
+				
+			}	
+		}
+	}	
+}
+
+
+// ************************
+// check maze for any unvisited nodes
+byte checkMazeNodes(byte *maze_nodes) {
+	
+	byte unvisited = 1;
+	for ( byte i=0; i<105; i++ ) {
+		if ( maze_nodes[i] == 1 ) unvisited = 0;
+	}
+	
+	return unvisited;
+	
+}
