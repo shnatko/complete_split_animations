@@ -129,13 +129,13 @@ TODO:  general code cleanup, add nes controller presence detect, need to add a p
 
 // control overall flow of pgm
 byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
-int cycle_time = 15000;	       // time in ms to wait between switching to next animation in sequence
+int cycle_time = 20000;	       // time in ms to wait between switching to next animation in sequence
 const byte debug = 0;          // set to 1 to get serial data out for debug
 const byte wifi = 0;           // set to 1 to enable wifi shield
-const byte cal = 0;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
+const byte cal = 1;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
 const byte code_array[14] = { 0, 0, 1, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7};
-byte animation_sequence[18] = {1, 17, 16, 4, 5, 6, 7, 8, 11, 0, 99, 99, 99, 99, 14, 99, 0, 99};
+byte animation_sequence[18] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 17, 11, 99, 99, 99, 14, 99, 0, 99};
 
 // wifi stuff
 char ssid[] = "SSID_name";                 //  your network SSID (name)
@@ -387,7 +387,7 @@ byte drop_fall_timer[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 float gravity = 0.1;
 
 //variable for text scrolling
-String scrollText = "200 followers! thanks tublr.";
+String scrollText = "hello tumblr!";
 String scrollTime = String(millis());
 int16_t text_color = 6;
 int16_t character_origin[140];  // grr. fixed length  140 is alot though.. right, twitter?
@@ -448,7 +448,10 @@ int16_t current_cell = 0;			// current cell being tracked for generation/solving
 byte nodestack[105];				// array to use as lifo to track visited nodes as maze is travered
 char stack_index = 0;				// ptr to top of nodestack ( array location of last "pushed" node )
 byte startnode = 0;
-byte endnode = 104;				
+byte endnode = 104;
+byte visted_nodes[105];				// since not using recursion when solving maze ( for looping and displaying purposes ) need to store array of visited nodes during maze solve				
+byte wall_update = 0;				// indicate to solver that we just want to update the state of the wall LED this run through the loop, makes sole animation smoother
+byte next_cell = 0;					// to smoothen animation, need to store next node found 
 
 
 // the setup routine runs once when you press reset:
@@ -834,7 +837,7 @@ void loop()  {
 			break;
 		case 17: 
 			// maze, currently does nothing, eventually have solver called here
-			init_maze(maze_nodes, maze_walls, nodestack, &stack_index, ledCount, display_mem, &current_cell, wave_color, debug);
+			maze_solve(&current_cell, &endnode, maze_nodes, maze_walls, nodestack, &stack_index, display_mem, &wall_update, wave_color, nes_state1, &animation_interval, &mode_time, &random_type, &next_cell, debug );
 			break;
 		
 
@@ -1349,7 +1352,7 @@ void next_animation(byte switchto) {
 			}
 		}
 		random_type = random(0, 5);
-		random_type = 4;
+		//random_type = 4;
 		if ( random_type == 4 ) {
 			dx = 0.1;
 			wave_rate = 200;
@@ -1468,11 +1471,11 @@ void next_animation(byte switchto) {
 	
 		// maze
 		nes_on();
-		random_type = random(0,2);
-		animation_interval = 2000;
-		wave_color[0] = random(1,512);
-		//wave_color[0] = 64;
-		init_maze(maze_nodes, maze_walls, nodestack, &stack_index, ledCount, display_mem, &current_cell, wave_color, debug);
+		animation_interval = 20;
+		//wave_color[0] = random(1,512);
+		wave_color[0] = 3;
+		wave_color[1] = random(1,512);
+		init_maze(maze_nodes, maze_walls, nodestack, &stack_index, ledCount, display_mem, &current_cell, wave_color, &random_type, &wall_update, debug);
 	
 	}
 }
@@ -1574,7 +1577,7 @@ void calibrate(byte caltype) {
 
       // manually tune calibrated values, for example, makes edges a bit more sensitive
       if ( i > 31 && i < 48 ) {
-        ir_cal_on[i] = ir_cal_on[i] * 1.20;
+        ir_cal_on[i] = ir_cal_on[i] * 1.25;
         ir_cal_off[i] = ir_cal_on[i] * 0.85;
       } else if ( i < 16 ) {
         ir_cal_on[i] = ir_cal_on[i] * 1.10;
@@ -1583,7 +1586,7 @@ void calibrate(byte caltype) {
         ir_cal_on[i] = (ir_cal_on[i]) * 1.35;  // row 4 is sensitive, raise his threshold further
         ir_cal_off[i] = ir_cal_on[i] * 0.95;
       } else {
-        ir_cal_on[i] = (ir_cal_on[i] + 1) * 1.2; // 20% above max ambient level is threshold
+        ir_cal_on[i] = (ir_cal_on[i] + 1) * 1.25; // 20% above max ambient level is threshold
         ir_cal_off[i] = ir_cal_on[i] * 0.85; // 7% below on threshold for some hysterisis
       }
 

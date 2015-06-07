@@ -53,7 +53,7 @@ void serial_control(int16_t*, int16_t*, int16_t, int16_t);
 void tetris(byte*, byte*, byte*, byte*, byte*, unsigned long*, int16_t*, byte*, byte*, byte*, byte*, int16_t*, int16_t*, int16_t, byte, unsigned long*, byte);
 void snake(byte*, int16_t*, int16_t*, int16_t, byte, byte, int16_t*, int16_t*, byte*, byte*, byte*, byte*, int16_t*, int16_t*, byte*, const byte, int16_t*, byte);
 void life(byte*, int*, int16_t*, int16_t, byte*, byte, int16_t*, int16_t*, byte);
-
+void maze_solve(int16_t*, byte*, byte*, byte*, byte*, char*, int16_t*, byte*, int16_t*, byte, int16_t*, unsigned long*, byte*, byte*, byte);
 
 
 
@@ -80,9 +80,12 @@ void drawSnakes(int16_t*, int16_t*, int16_t*, int16_t, const byte, int16_t, int1
 void checkSnakes(int16_t*, int16_t*, byte, byte*, byte*, int16_t*, int16_t*, byte, byte);
 void newFood(int16_t*, int16_t*, const byte, int16_t*, int16_t*, byte, byte);
 void init_life(byte*, int*, int16_t, int16_t*);
-void init_maze(byte*, byte*, byte*, char*, int16_t, int16_t*, int16_t*, int16_t*, byte);
+void init_maze(byte*, byte*, byte*, char*, int16_t, int16_t*, int16_t*, int16_t*, byte*, byte*, byte);
 void maze_gen(int16_t*, byte*, byte*, byte*, char*, byte);
 byte checkMazeNodes(byte*);
+void set_wall(byte, byte, int16_t, int16_t*);
+void colorchange(int16_t, int16_t, int16_t*, int16_t);
+
 
 
 

@@ -2856,7 +2856,7 @@ void snake(byte *players, int16_t *score, int16_t *display_mem, int16_t ledCount
 */
 
 // #################################################################
-// 15: life
+// 16: life
 void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, byte *gamestate, byte nes_state1, int16_t *animation_interval, int16_t *wave_color, byte debug) {
 
   // grab nes input states 
@@ -2994,6 +2994,219 @@ void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, by
 	wave_color[0] = random(1,512);	
   }
 
+}
+
+
+// ************************
+// 17: maze_solve
+void maze_solve(int16_t *current_cell, byte *endnode, byte *maze_nodes, byte *maze_walls, byte *nodestack, char *stack_index, int16_t *display_mem, byte *wall_update, int16_t *wave_color, byte nes_state1, int16_t *animation_interval, unsigned long *reset_wait, byte *type, byte *next_cell, byte debug ) {
+	
+	 // grab nes input states 
+	byte up1, down1, left1, right1, a1, b1, sel1, start1 = 1;
+  
+	up1 = bitRead(nes_state1, 4);
+	down1 = bitRead(nes_state1, 5);
+	left1 = bitRead(nes_state1, 6);
+	right1 = bitRead(nes_state1, 7);
+	a1 = bitRead(nes_state1, 0);
+	b1 = bitRead(nes_state1, 1);
+	sel1 = bitRead(nes_state1, 2);
+	start1 = bitRead(nes_state1, 3);
+	
+	
+	byte node_row = 0;
+	byte node_col = 0;
+	byte unvisited = 0;
+	//int16_t pathcolor = 256;
+	
+	if ( *current_cell == *endnode ) {
+		// done! do something here?
+		
+		node_row = *current_cell / 15;
+		node_col = *current_cell % 15;
+		
+		if ( *type == 0 ) {
+			*animation_interval = 50;
+		
+			for ( int16_t i=0; i<512; i++ ) {
+				fade_down(i, 1, display_mem);
+			}			
+				
+			set_wall(*endnode, nodestack[*stack_index-1], wave_color[1], display_mem);
+			display_mem[33 + (64*node_row) +(2*node_col)] = wave_color[1];
+			display_mem[34 + (64*node_row) + (2*node_col)] = wave_color[1];
+			display_mem[32] = wave_color[1];
+		
+		//draw_row(15, 56, display_mem, 32);
+		//draw_col(31, 56, display_mem, 16);
+		
+		} else if ( *type == 1 ) {
+			
+			colorchange(wave_color[0], 16, display_mem, 512 );
+			display_mem[34 + (64*node_row) + (2*node_col)] = wave_color[1];
+			
+		}
+		
+		if ( millis() - *reset_wait > 2000 ) init_maze(maze_nodes, maze_walls, nodestack, stack_index, 512, display_mem, current_cell, wave_color, type, wall_update, debug);
+
+			
+		
+	} else {   // shit, you mean we actually have to try to solve this thing?
+		
+		// calc row and column for current node
+		node_row = *current_cell / 15;
+		node_col = *current_cell % 15;
+		byte neighbors[4] = {110,110,110,110};  // 110 indicated no valid or visited neighbor, index 0 = upper, 1 = lower, 2 = left, 3 = right
+		
+		// first mark the current cell as visited
+		maze_nodes[*current_cell] = 0;
+			
+		// find current cell's neighbors ( no wall between them ) and check if any of them have not yet been visited, if both are true, add it to the neighbors array to be randomly chosen from next
+	
+		// check upper neighbor
+		if ( node_row > 0 ) {
+			
+			if ( maze_walls[97 + (6*node_col) + node_row] == 0 && maze_nodes[*current_cell - 15] == 1 ) {
+				neighbors[0] = *current_cell - 15;
+				unvisited++;
+			}
+		}
+		
+		// check lower neighbor
+		if ( node_row < 6 ) {
+			if ( maze_walls[98 + (6*node_col) + node_row] == 0  && maze_nodes[*current_cell + 15] == 1 ) {
+				neighbors[1] = *current_cell + 15;
+				unvisited++;
+			}
+		}
+		
+		// check left neighbor
+		if ( node_col > 0 ) {
+			if ( maze_walls[*current_cell - (node_row+1)] == 0 && maze_nodes[*current_cell - 1] == 1 ) {
+				neighbors[2] = *current_cell - 1;
+				unvisited++;
+			}
+		}
+		
+		// check right neighbor
+		if ( node_col < 14 ) {
+			if ( maze_walls[*current_cell - node_row] == 0 && maze_nodes[*current_cell + 1] == 1 ) {
+				neighbors[3] = *current_cell + 1;
+				unvisited++;
+			}
+		}
+		
+		// now randomly select a neighbor cell and if neighbor exists and if it has been checked yet, if it both exists and has not been checked, remove wall between cells recursively 	
+		if ( unvisited > 0 ) {
+			
+			// actual update to new node takes place in 2 steps, first is to grab a new neighbor cell and move to the wall between the 2 cells
+			// second step ( next iteration through loop ) is to move the current cell to the new one and light the new node
+			if ( *wall_update == 0 ) {
+				
+				*next_cell = random(0,4);
+			
+				// we know at least one neighbor is unvisited, keep searching for it
+				while( neighbors[*next_cell] == 110 ) {
+					*next_cell = random(0,4);
+				}
+			
+				// once found, make neighbor cell the current cell and push previous location to stack, next time through loop this will be the starting point
+				
+				if ( debug == 1 ) {
+					Serial.print("current_cell: ");
+					Serial.print(*current_cell);
+					Serial.print("  next_cell: ");
+					Serial.println(neighbors[*next_cell]);
+				}
+			
+				// light wall between the 2 nodes and move current node to new node and set wall update flag
+				set_wall(*current_cell, neighbors[*next_cell], wave_color[1], display_mem);
+				//*current_cell = neighbors[*next_cell];			
+				*wall_update = 1;
+				
+			} else {
+				
+				// update current cell to new neighbor cell, next time through loop this will be the starting point
+				// push current cell to stack
+				nodestack[*stack_index] = *current_cell;
+				*stack_index = *stack_index + 1;
+				*current_cell = neighbors[*next_cell];
+
+				// draw current location
+				node_row = *current_cell / 15;
+				node_col = *current_cell % 15;
+				display_mem[33 + (64*node_row) + (2*node_col)] = wave_color[1];
+				*wall_update = 0;
+				
+			}
+			
+			if ( *current_cell == *endnode ) *reset_wait = millis();
+			
+				
+		} else {
+			// no unvisited cells in at current cell location, pop cell from stack and use as next current cell, this will work backwards through the traversed nodes until one with unvisted neighbors is found
+			// if I did this correctly, this procedure should result in the algorithm finding a path from start to end node
+						
+			if ( *stack_index > 0 ) {
+				//*stack_index = *stack_index - 1;
+				
+				if ( *wall_update == 0 ) {
+					// clear current location
+					node_row = *current_cell / 15;
+					node_col = *current_cell % 15;
+					display_mem[33 + (64*node_row) + (2*node_col)] = 0;
+					*wall_update = 1;
+				} else {
+					// clear wall between the 2 nodes and move current node to previous node in stack
+					*stack_index = *stack_index - 1;
+					set_wall(*current_cell, nodestack[*stack_index], 0, display_mem);
+					*current_cell = nodestack[*stack_index];
+					nodestack[*stack_index] = 110;
+					*wall_update = 0;
+				}
+				
+				// clear wall between the 2 nodes and move current node to previous node in stack
+				//*stack_index = *stack_index - 1;
+				//set_wall(*current_cell, nodestack[*stack_index], 0, display_mem);
+				//*current_cell = nodestack[*stack_index];
+				//nodestack[*stack_index] = 110;
+				
+			}	
+		}
+	}
+
+	// draw current navigation path through maze, for each nonzero (<110) node in the stack light up that node's LED
+	for ( byte i=0; i<105; i++ ) {
+		
+		node_row = nodestack[i] / 15;
+		node_col = nodestack[i] % 15;
+		
+		//if ( *type == 1 ) wave_color[1] = random(1,512);
+			
+		if ( nodestack[i] != 110 ) {
+			display_mem[33 + (64*node_row) + (2*node_col)] = wave_color[1];
+			if ( i > 0 ) set_wall(nodestack[i], nodestack[i-1], wave_color[1], display_mem);
+		} else {
+			display_mem[33 + (64*node_row) + (2*node_col)] = 0;
+		}
+			
+	}
+	
+	
+	// lastly, check NES start for re-init  ( will add timer re-init on done soon
+	if ( start1 == 0 ) {
+		init_maze(maze_nodes, maze_walls, nodestack, stack_index, 512, display_mem, current_cell, wave_color, type, wall_update, debug);
+	}
+	
+	if ( a1 == 0 ) {
+		*animation_interval = *animation_interval - 5;
+		*animation_interval = constrain(*animation_interval, 10, 500);
+	}
+
+	if ( b1 == 0 ) {
+		*animation_interval = *animation_interval + 5;
+		*animation_interval = constrain(*animation_interval, 10, 500);
+	}
 }
 
 
@@ -3972,14 +4185,16 @@ void init_life(byte *gamestate, int *iteration, int16_t ledCount, int16_t *wave_
 
 // ************************
 // randomize maze board before trying to solve it
-void init_maze(byte *maze_nodes, byte *maze_walls, byte *nodestack, char *stack_index, int16_t ledCount, int16_t *display_mem, int16_t *current_cell, int16_t *wave_color, byte debug) {
+void init_maze(byte *maze_nodes, byte *maze_walls, byte *nodestack, char *stack_index, int16_t ledCount, int16_t *display_mem, int16_t *current_cell, int16_t *wave_color, byte *type, byte *wall_update, byte debug) {
 	
 	// when the init_maze function is called, the board will be cleared and a new random maze will be generated via a depth first search algorithm across the 105 node / 188 wall space
 	
 	// first clear current state of the array
 	clear_all(0, ledCount, display_mem);
 	*current_cell = 0;
-	wave_color[0] = random(1,512);
+	*wall_update = 0;
+	wave_color[1] = random(1,512);
+	*type = random(0,2);
 	
 	// reset the node array to every cell as unvisited and every wall as in place
 	for ( byte i = 0; i < 188; i++ ) {
@@ -4046,9 +4261,18 @@ void init_maze(byte *maze_nodes, byte *maze_walls, byte *nodestack, char *stack_
 	
 	// remove start and end node edges
 	// fixed start and end nodes for now
-	display_mem[32] = 0;
+	display_mem[32] = wave_color[1];
+	display_mem[33] = wave_color[1];
 	display_mem[446] = 0;
 	
+	// now that maze is create, mark all the nodes unvisited and set current cell to maze start	
+	for ( byte i=0; i < 105; i++ ) {
+		maze_nodes[i] = 1;
+		nodestack[i] = 110;
+	}
+	
+	*current_cell = 0;
+	*stack_index = 0;
 	
 }
 
@@ -4201,3 +4425,44 @@ byte checkMazeNodes(byte *maze_nodes) {
 	return unvisited;
 	
 }
+
+// ************************
+// set/unset wall LED between 2 given nodes, nodes must be adjacent!
+void set_wall(byte n1, byte n2, int16_t color, int16_t *display_mem) {
+	
+	byte node_row = n2 / 15;
+	byte node_col = n2 % 15;
+	
+	// compare 2 nodes to determine what their configuration is to decide which wall is to be set/unset
+	if ( n1 > n2 ) {
+		if ( n1 - n2 > 5 ) {  	// if true nodes are not in same row and n1 is below n2
+			// set n2 bottom wall
+			display_mem[65 + (64*node_row) + (2*node_col)] = color;
+		} else {				// else nodes are in same row and n1 is right of n2
+			// set n2 right wall
+			display_mem[34 + (64*node_row) + (2*node_col)] = color;
+		}			
+	} else {
+		if ( n2 - n1 > 5 ) {	// if true nodes are not in same row and n2 is below n1
+			// set n2 top wall
+			display_mem[1 + (64*node_row) + (2*node_col)] = color;
+		} else {				// else nodes are in same row and n2 is right of n1
+			// set n2 left wall
+			display_mem[32 + (64*node_row) + (2*node_col)] = color;
+		}
+	}
+}
+
+// ************************
+// color change,  replace any LED in current matrix of one color with another
+void colorchange(int16_t current_color, int16_t new_color, int16_t *display_mem, int16_t ledCount) {
+
+	for ( int16_t i=0; i<ledCount; i++ ) {
+		
+		if ( display_mem[i] == current_color ) display_mem[i] = new_color;
+		
+	}
+
+}
+
+
