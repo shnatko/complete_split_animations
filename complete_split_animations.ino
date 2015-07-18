@@ -94,6 +94,8 @@
  04.12: a few updates for phone app use
  05.01: added game of life animation
  05.17: start of maze generator / solver animation
+ 07.02: added flag sprite animation for july 4th
+ 07.15: started BT testing instead of wifi
 
 animation_number        animation
 0                       nes_paint
@@ -128,14 +130,14 @@ TODO:  general code cleanup, add nes controller presence detect, need to add a p
 #include "animations.h"       // header for animation functions/source code
 
 // control overall flow of pgm
-byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
-int cycle_time = 20000;	       // time in ms to wait between switching to next animation in sequence
+byte cycle = 1;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
+int cycle_time = 7500;	       // time in ms to wait between switching to next animation in sequence
 const byte debug = 0;          // set to 1 to get serial data out for debug
 const byte wifi = 0;           // set to 1 to enable wifi shield
 const byte cal = 1;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
 const byte code_array[14] = { 0, 0, 1, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7};
-byte animation_sequence[18] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 17, 11, 99, 99, 99, 14, 99, 0, 99};
+byte animation_sequence[18] = {10, 11, 5, 99, 5, 6, 7, 8, 1, 17, 11, 99, 99, 99, 14, 99, 0, 99};
 
 // wifi stuff
 char ssid[] = "SSID_name";                 //  your network SSID (name)
@@ -387,7 +389,7 @@ byte drop_fall_timer[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 float gravity = 0.1;
 
 //variable for text scrolling
-String scrollText = "hello tumblr!";
+String scrollText = "Happy 4th of July!!";
 String scrollTime = String(millis());
 int16_t text_color = 6;
 int16_t character_origin[140];  // grr. fixed length  140 is alot though.. right, twitter?
@@ -627,7 +629,11 @@ void setup()  {
 
   // display welcome screen
   splash(0, display_mem);
-  clear_all(512, ledCount, display_mem);
+  clear_all(0, ledCount, display_mem);
+  
+  for (int i=0; i<ledCount; i++ ) {
+	display_mem[i] = pgm_read_word_near( &flag3[i] );
+  }
 
   if (debug == 1 ) {
 
@@ -807,7 +813,7 @@ void loop()  {
 			scrollTime = String(millis());
 			if ( random_type > 0 ) {
 			//          type, text,    text_size,               color_type
-			text_scroll(1, scrollText, scrollText.length() + 1, 0, display_mem, ledCount, text_color, character_origin, ir_detected, debug ); //random_type);
+			text_scroll(1, scrollText, scrollText.length() + 1, 2, display_mem, ledCount, text_color, character_origin, ir_detected, debug ); //random_type);
 			} else {
 			//          type, text,    text_size,             color_type
 			text_scroll(2, scrollText, scrollText.length() + 1, 0, display_mem, ledCount, text_color, character_origin, ir_detected, debug ); //random_type);
@@ -815,7 +821,7 @@ void loop()  {
 			break;
 		case 11:
 			// sprite animation w/ frames read from pgm memory
-			sprite_animate(0, 500, display_mem, nes_state1, ledCount, &sprite_mode, &mode_time);
+			sprite_animate(0, 200, display_mem, nes_state1, ledCount, &sprite_mode, &mode_time);
 			break;
 		case 12:
 			// stopwatch function
@@ -850,7 +856,7 @@ void loop()  {
       }*/
 
     
-    if(debug == 2 ){
+    if(debug == 3 ){
       //Serial.print( animation_number );
 
       Serial.print( "NES controller0 state:  " );
@@ -1277,7 +1283,9 @@ void next_animation(byte switchto) {
 		color = 0;
 		randomSeed(analogRead(0));
 		random_type = random(0, 2);
+		random_type = 1;
 		firework_count = random(1, 6);
+		firework_count = 4;
 		for ( byte i = 0; i < fadeLeds; i++) {
 			led_to_fade[i] = (32 * random(3, 13)) + random(3, 28); // constrain initial points so fireworks will be fully on panel
 			fw_state[i] = 0;
@@ -1376,6 +1384,7 @@ void next_animation(byte switchto) {
 		// text_scroll
 		scrollTime = String(millis());
 		random_type = random(1, 3);
+		random_type = 1;
 	
 		if ( random_type > 0 ) {
 			for ( int16_t i = 0; i <= scrollText.length(); i++ ) {
@@ -1504,7 +1513,7 @@ void calibrate(byte caltype) {
   if ( caltype == 1 ) {
     unsigned long cal_prev_millis = 0;
 
-	
+	/*
     for ( int16_t j = 0; j < 512; j++ ) {
 
       // set board to current led color/brightness
@@ -1521,12 +1530,12 @@ void calibrate(byte caltype) {
         ir_cal_on[i] = max(ir_sense_data[i], ir_cal_on[i]);
       }
 
-    }
+    }*/
 
 
     // second calibratoin type: instead of turning on all LEDs at once, turn on only the 4 for each node to full brightness immediately
     // doesn't really work.
-    /*
+    
     int term0 = 0;
     for ( byte i=0; i<=127; i++ ) {
 
@@ -1548,6 +1557,8 @@ void calibrate(byte caltype) {
       ir_cal_on[i] = max(ir_sense_data[i], ir_cal_on[i]);
 
     }
+	
+	/*
 
     // do the same thing now in reverse
     for ( byte i=127; i>0; i-- ) {
@@ -1959,5 +1970,38 @@ void WIFIconfig() {
   printWifiStatus();                        // you're connected now, so print out the status
 
 }
+
+
+
+// setup for BT module, hopefully less complicated than the wifi since it's just being treated as a serial connection
+/*
+void BTconfig()
+{
+  pinMode(bluetoothRx, INPUT);
+  pinMode(bluetoothTx, OUTPUT);
+  pinMode(ledPin, OUTPUT);
+  digitalWrite(ledPin, LOW);
+ 
+  bluetooth.begin(38400); 
+
+  
+  bluetooth.print("\r\n+STWMOD=0\r\n");  // set to slave
+  bluetooth.print("\r\n");
+  delay(2000);
+  bluetooth.print("\r\n+INQ=1\r\n");  // set to inquiry
+  
+  if( bluetooth.available() > 0 )
+  {
+    int data = bluetooth.read();
+    if( data > 0 ) Serial.print((char)data);
+  }
+  
+  //bluetooth.print("\r\n+STAUTO=1\r\n");  // set to auto pair  Serial.begin(38400);
+  
+
+
+  //initBT();
+}
+*/
 
 

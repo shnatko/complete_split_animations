@@ -31,6 +31,10 @@ extern const word link_left_1[512] PROGMEM;
 extern const word link_left_2[512] PROGMEM;
 extern const word link_up_1[512] PROGMEM;
 extern const word link_up_2[512] PROGMEM;
+extern const word flag1[512] PROGMEM;
+extern const word flag2[512] PROGMEM;
+extern const word flag3[512] PROGMEM;
+
 
 // UGLY but big fucking lookup table to find index for LED array to draw a given letter/punctuation
 extern byte letter_lookup(char );

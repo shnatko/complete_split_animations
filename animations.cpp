@@ -65,20 +65,38 @@ void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_me
   // start button used to clear array
   if ( start == 0 ) {
 
-    if ( debug == 2 ) Serial.println("screen output:");
+    if ( debug == 2 ) {
+		
+		Serial.println("screen output:");
+		int16_t tempary[512];
+		
+		for ( int16_t i = 0; i < ledCount; i++ ) {
+			tempary[i] = 0;
+		}
 
-    for ( int16_t i = 0; i < ledCount; i++ ) {
+		for ( int16_t i = 0; i < ledCount; i++ ) {
 
-      if (display_mem[i] > 0) {
-        paint_string = String("display_mem[");
-        paint_string = String(paint_string + i + "] = " + display_mem[i] + ";" );
-        if (debug == 2 && display_mem[i] > 0  ) {
-          Serial.println(paint_string);
-        }
-      }
-
-      display_mem[i] = 0;
+		// if (display_mem[i] > 0) {
+			// paint_string = String("display_mem[");
+			// paint_string = String(paint_string + i + "] = " + display_mem[i] + ";" );
+			// if (debug == 2 && display_mem[i] > 0  ) {
+			// Serial.println(paint_string);
+			// }
+		// }
+			
+			if ( display_mem[i] > 0 ) {
+				tempary[i+32] = display_mem[i];   //shift entire screen down 1 row before printout
+			}
+		}
+		
+		for ( int16_t i = 0; i < ledCount; i++ ) {
+			Serial.print(tempary[i]);
+			Serial.print(", ");
+			display_mem[i] = 0;
+		}
     }
+	
+	Serial.println("done!");
     
     // clear paint choose state
     *color_select = 0;
@@ -177,7 +195,7 @@ void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_me
 
   }
 
-  if ( debug == 2 ) {
+  if ( debug == 3 ) {
 	for ( byte i=0; i<14; i++ ) {
 		Serial.print(current_code[i]);
 	}
@@ -2344,12 +2362,24 @@ void text_scroll(byte type, String text, byte text_size, byte color_type, int16_
         Serial.println(i);
       }
 
+	  /*
       if ( color_type == 2 ) {     
         if ( i % 2 == 0 ) {
           fg_color = 448;
         } else {
           fg_color = 56;
         } 
+      }
+	  */
+	  
+	  if ( color_type == 2 ) {     
+        if ( i % 3 == 0 ) {
+			fg_color = 448;
+        } else if ( i % 3 == 1 ) {
+			fg_color = 511;
+        } else {
+			fg_color = 7;
+		}
       }
 
       //if (letter_lookup(text[i]) == 62 ) fg_color = 448;
@@ -2402,10 +2432,10 @@ void text_scroll(byte type, String text, byte text_size, byte color_type, int16_
 
 // #################################################################
 // 11: sprite animate:  animate sprites read from program memory, including control by NES controller
-void sprite_animate (byte type, byte frametime, int16_t *display_mem, byte nes_state1, int16_t ledCount, byte *sprite_mode, unsigned long *mode_time ) {
+void sprite_animate (byte type, int16_t frametime, int16_t *display_mem, byte nes_state1, int16_t ledCount, byte *sprite_mode, unsigned long *mode_time ) {
 
   unsigned long frame_start;
-  byte up, down, left, right;
+  byte up, down, left, right,a,b;
 
   if ( type == 0 ) {
     // grab frame 1 from memory, display it
@@ -2414,26 +2444,29 @@ void sprite_animate (byte type, byte frametime, int16_t *display_mem, byte nes_s
       if ( *sprite_mode == 1 ) display_mem[i] = pgm_read_word_near( &link_right_1[i] );
       if ( *sprite_mode == 2 ) display_mem[i] = pgm_read_word_near( &link_left_1[i] );
       if ( *sprite_mode == 3 ) display_mem[i] = pgm_read_word_near( &link_up_1[i] );
-
+	  if ( *sprite_mode == 4 ) display_mem[i] = pgm_read_word_near( &flag2[i] );
+	
     }
     frame_start = millis();
     while ( millis() - frame_start < frametime ) {
       // do nothing, just wait
     }
 
-    // grab frame2 from memory, disaply it
+    // grab frame2 from memory, display it
     for (int16_t i = 0; i < ledCount; i++ ) {
       if ( *sprite_mode == 0 ) display_mem[i] = pgm_read_word_near( &link_down_2[i] );
       if ( *sprite_mode == 1 ) display_mem[i] = pgm_read_word_near( &link_right_2[i] );
       if ( *sprite_mode == 2 ) display_mem[i] = pgm_read_word_near( &link_left_2[i] );
       if ( *sprite_mode == 3 ) display_mem[i] = pgm_read_word_near( &link_up_2[i] );
-
+	  if ( *sprite_mode == 4 ) display_mem[i] = pgm_read_word_near( &flag3[i] );
+	  
     }
 
     frame_start = millis();
     while ( millis() - frame_start < frametime ) {
       // do nothing, just wait
     }
+		
 
   }
 
@@ -2442,16 +2475,22 @@ void sprite_animate (byte type, byte frametime, int16_t *display_mem, byte nes_s
   down = bitRead(nes_state1, 5);
   left = bitRead(nes_state1, 6);
   right = bitRead(nes_state1, 7);
-
-  if ( down == 0 ) *sprite_mode = 0;
+  a = bitRead(nes_state1, 0);
+  b = bitRead(nes_state1, 1);
+  
+  if ( down == 0 )  *sprite_mode = 0;
   if ( right == 0 ) *sprite_mode = 1;
-  if ( left == 0 ) *sprite_mode = 2;
-  if ( up == 0 ) *sprite_mode = 3;
+  if ( left == 0 )  *sprite_mode = 2;
+  if ( up == 0 )    *sprite_mode = 3;
+  if ( a == 0 )     *sprite_mode = 4;
+  if ( b == 0 )     *sprite_mode = 5;
+  
 
 
   //can also use a timer to randomly switch direction
   if ( millis() - *mode_time > 2200 ) {
-    *sprite_mode = random(0, 4);
+    //*sprite_mode = random(4, 6);
+	*sprite_mode = 4;
     *mode_time = millis();
   }
 }

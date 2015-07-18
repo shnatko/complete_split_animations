@@ -47,7 +47,7 @@ void lines( byte, int16_t*, int16_t, byte*, short*, short*, byte, byte, byte );
 void chaser(byte, int16_t, int16_t*, byte, byte*, byte*, byte, byte*, byte*, byte*, byte*, short*, short*, int16_t*, byte*, int16_t*, unsigned long*, int16_t );
 void light_sense( byte, int16_t*, int16_t, int16_t*, byte*, byte*, volatile byte*, byte*, byte*, byte*, int16_t*, int16_t*, unsigned long*, int16_t*, byte*, byte*, byte, int16_t, byte);
 void text_scroll(byte, String, byte, byte, int16_t*, int16_t, int16_t, int16_t*, byte, byte );
-void sprite_animate (byte, byte, int16_t*, byte, int16_t, byte*, unsigned long* );
+void sprite_animate (byte, int16_t, int16_t*, byte, int16_t, byte*, unsigned long* );
 void stopwatch(byte, long*, long*, long*, byte*, int16_t*, byte, byte);
 void serial_control(int16_t*, int16_t*, int16_t, int16_t);
 void tetris(byte*, byte*, byte*, byte*, byte*, unsigned long*, int16_t*, byte*, byte*, byte*, byte*, int16_t*, int16_t*, int16_t, byte, unsigned long*, byte);
