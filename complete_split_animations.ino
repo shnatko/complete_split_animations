@@ -95,7 +95,7 @@
  05.01: added game of life animation
  05.17: start of maze generator / solver animation
  07.02: added flag sprite animation for july 4th
- 07.15: started BT testing instead of wifi
+ 07.15: started BT testing instead of wifi, removed wifi code for this branch
 
 animation_number        animation
 0                       nes_paint
@@ -125,29 +125,18 @@ TODO:  general code cleanup, add nes controller presence detect, need to add a p
 
 
 #include <SPI.h>              // SPI Library used to clock data out to the shift registers
-#include <WiFi.h>             // to talk to wifi shield
 #include <avr/pgmspace.h>     // for use of program memory to store static data
 #include "animations.h"       // header for animation functions/source code
 
 // control overall flow of pgm
-byte cycle = 1;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
+byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
 int cycle_time = 7500;	       // time in ms to wait between switching to next animation in sequence
-const byte debug = 0;          // set to 1 to get serial data out for debug
-const byte wifi = 0;           // set to 1 to enable wifi shield
-const byte cal = 1;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
+const byte debug = 1;          // set to 1 to get serial data out for debug
+const byte bluetooth = 1;	   // set to 1 to enable BT shield
+const byte cal = 0;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
 const byte code_array[14] = { 0, 0, 1, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7};
-byte animation_sequence[18] = {10, 11, 5, 99, 5, 6, 7, 8, 1, 17, 11, 99, 99, 99, 14, 99, 0, 99};
-
-// wifi stuff
-char ssid[] = "SSID_name";                 //  your network SSID (name)
-char pass[] = "network_password";            // your network password
-int keyIndex = 0;              		 // your network key Index number (needed only for WEP)
-long requestTimer = 0;
-long server_uptime = 0;
-
-int status = WL_IDLE_STATUS;
-WiFiServer server(80);
+byte animation_sequence[18] = {0, 4, 99, 99, 5, 6, 7, 8, 1, 17, 11, 99, 99, 99, 14, 99, 0, 99};
 
 // static defines
 
@@ -160,6 +149,9 @@ WiFiServer server(80);
 #define blank_low  REG_PIOC_ODSR = REG_PIOC_ODSR & 0xFFFFFFCF    // shift reg blank pin low ( ENABLE outputs )
 #define latch_high REG_PIOD_ODSR = REG_PIOD_ODSR | 0x00000600   // latch pin high to shift regs
 #define latch_low  REG_PIOD_ODSR = REG_PIOD_ODSR &  0xFFFFF9FF   // latch pin low to shift regs
+
+#define ledDataPin  75            // MOSI, board pin 75
+#define shiftclkPin 76            // SPI clock, board pin 76
 
 #define NES_clk1     26  //PORTD1                  
 #define NES_latch1   25  //PORTD0                 
@@ -313,6 +305,9 @@ unsigned long interrupt_total = 0;
 long interrupt_counter = 100000;
 */
 
+// for BT communicatoin
+String currentLine = "";
+
 // variables used for interrupt routine to refresh led array
 volatile byte row_count = 0;                    // row counter when refreshing array
 
@@ -459,22 +454,29 @@ byte next_cell = 0;					// to smoothen animation, need to store next node found
 // the setup routine runs once when you press reset:
 void setup()  {
 
-  if ( debug > 0 )  Serial.begin(57600);
-
-  Serial1.begin(9600);  // pre-initialize USART0
-  USART0config();
-  USART0status();
-  if ( wifi == 1 ) WIFIconfig();    // init wifi board if using it
+  if ( debug > 0 )  Serial.begin(38400);
+  
+  // setup SPI for panel control
+  SPI.setBitOrder(MSBFIRST);            //Most Significant Bit First
+  SPI.setDataMode(SPI_MODE0);           // Mode 0 Rising edge of data, keep clock low
+  SPI.setClockDivider(8);               //Run the data in at 84MHz / 6 = 16MHz 
+  //SPI.setClockDivider(21);
+  
+  if ( bluetooth == 1 ) BTconfig(debug);	// init BT board if using it
 
   // set up data direction registers for LED control
   pinMode(30, OUTPUT);
   pinMode(32, OUTPUT);
   pinMode(36, OUTPUT);
   pinMode(37, OUTPUT);
+  pinMode(shiftclkPin, OUTPUT);
+  pinMode(ledDataPin, OUTPUT);
 
   // set initial state for shift reg pins
   latch_low;
   blank_high;
+  digitalWrite(shiftclkPin, LOW);
+  digitalWrite(ledDataPin, LOW);
 
   // set up data direction registers for NES control
   pinMode(NES_clk0, OUTPUT);  // nes outputs manually set as well, none of this register manipulation stuff yet.
@@ -565,7 +567,7 @@ void setup()  {
 
   NVIC_EnableIRQ(TC0_IRQn); // enable TC0 interrupts
 
-  if ( debug == 1 )  Serial.println("interrupts started! ");
+  if ( debug == 1 )  Serial.println("Interrupts started! ");
 
   // ******************************************************************************************************************************
   // TC1 channel 0 will be used for controller input polling and response
@@ -620,6 +622,9 @@ void setup()  {
   REG_TC1_IDR1 = 0b11101111; 	// disable other interrupts
 
   NVIC_EnableIRQ(TC4_IRQn); // enable TC1 interrupts
+  
+  // lastly start up SPI
+  SPI.begin();
 
   //calibrate IR sensor array
   calibrate(cal);
@@ -630,10 +635,7 @@ void setup()  {
   // display welcome screen
   splash(0, display_mem);
   clear_all(0, ledCount, display_mem);
-  
-  for (int i=0; i<ledCount; i++ ) {
-	display_mem[i] = pgm_read_word_near( &flag3[i] );
-  }
+
 
   if (debug == 1 ) {
 
@@ -746,8 +748,8 @@ void loop()  {
     animationCycleMillis = millis();
   }
 
-  //call wifi client function
-  if ( wifi == 1 ) wifi_client();
+  //call bluetooth client to process any bluetooth data
+  if ( bluetooth == 1 ) bluetooth_client(debug);
 
   // main loop,  if animation interval has expired, make another call to selected animation function
   if ( millis() - previousMillis > animation_interval && pauseState == 0 && gameOver == 0 ) {
@@ -1002,62 +1004,29 @@ void TC0_Handler() {
   // moved blanking of reg outputs after all the shade calculation/lookup stuff.  hopefully this means the LEDs will stay on longer during each interrupt sequence
   blank_high;
   delayMicroseconds(20);  // needed to add a bit of dly here. was getting some ghosting between rows
-
-  // transmit bytes for shift regs out to devices using USART0 in SPI master mode rather than actual hardware SPI since it will interfere with the wifi shield
-  //byte txrdy = USART0->US_CSR  >> 1 & 0x1u;  // 0x1u means 0x hex digit unsigned.  so 0x1u = 0001b
-
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)  // check that txrdy bit is set before proceeding with transfer
-    ;
-  USART0->US_THR = shift_byte_r3;
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = shift_byte_g3;
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = shift_byte_b3;
-
-
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)  // check that txrdy bit is set before proceeding with transfer
-    ;
-  USART0->US_THR = shift_byte_r2;
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = shift_byte_g2;
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = shift_byte_b2;
-
-
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)  // check that txrdy bit is set before proceeding with transfer
-    ;
-  USART0->US_THR = shift_byte_r1;
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = shift_byte_g1;
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = shift_byte_b1;
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = row_cntl1[row_count];
-
-
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = shift_byte_r0;
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = shift_byte_g0;
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = shift_byte_b0;
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-  USART0->US_THR = row_cntl0[row_count];
-  while ((USART0->US_CSR & US_CSR_TXEMPTY) == 0)
-    ;
-
-	
+  
+  
+  // now send rgb bytes for current row out to shift regs, send out data for column 24:31 first, then 16:23, followed by cols 8:15 / rows 8:15 first, followed by 0:7 since driver boards are daisy-chained
+  
+  SPI.transfer(shift_byte_r3,SPI_CONTINUE);
+  SPI.transfer(shift_byte_g3,SPI_CONTINUE);
+  SPI.transfer(shift_byte_b3,SPI_CONTINUE);
+    
+  SPI.transfer(shift_byte_r2,SPI_CONTINUE);
+  SPI.transfer(shift_byte_g2,SPI_CONTINUE);
+  SPI.transfer(shift_byte_b2,SPI_CONTINUE);
+    
+  SPI.transfer(shift_byte_r1,SPI_CONTINUE);
+  SPI.transfer(shift_byte_g1,SPI_CONTINUE);
+  SPI.transfer(shift_byte_b1,SPI_CONTINUE);
+  SPI.transfer(row_cntl1[row_count],SPI_CONTINUE);
+    
+  SPI.transfer(shift_byte_r0,SPI_CONTINUE);
+  SPI.transfer(shift_byte_g0,SPI_CONTINUE);
+  SPI.transfer(shift_byte_b0,SPI_CONTINUE);
+  SPI.transfer(row_cntl0[row_count]);
+  
+  
 
   // latch shift reg data into output latches and enable register outputs
   latch_high;
@@ -1644,38 +1613,160 @@ void nes_off() {
   REG_TC1_IDR0 = 0b11111111; // disable other interrupts
 }
 
-// print status of wifi connection
-void printWifiStatus() {
-  // print the SSID of the network you're attached to:
-  if ( debug == 1 ) Serial.print("SSID: ");
-  if ( debug == 1 ) Serial.println(WiFi.SSID());
-
-  // print your WiFi shield's IP address:
-  IPAddress ip = WiFi.localIP();
-  if ( debug == 1 ) Serial.print("IP Address: ");
-  if ( debug == 1 ) Serial.println(ip);
-
-  // print the received signal strength:
-  long rssi = WiFi.RSSI();
-  if ( debug == 1 ) Serial.print("signal strength (RSSI):");
-  if ( debug == 1 ) Serial.print(rssi);
-  if ( debug == 1 ) Serial.println(" dBm");
-  // print where to go in a browser:
-  if ( debug == 1 ) Serial.print("To see this page in action, open a browser to http://");
-  if ( debug == 1 ) Serial.println(ip);
-}
-
-
-// wifi client, this will be used to process request from wifi for panel control
-void wifi_client() {
+// bluetooth client, this will be used to process request from bluetooth for panel control
+void bluetooth_client(byte debug) {
 	
-	// android application operates by sending http get request to wifi server with different tokens in the url that the micro controller will parse out and use
+	// android application operates by sending bluetooth serial data with different tokens the micro controller will parse out and use
 	// current tokens:
-	// *C = color request, set current color of all LEDs on table to provided value
-	// *A = animation request, set table animation to provided animation number
-	// *I = interval request, set table animation interval
-	// *T = animation cycle time, used to tell table to either cycle animations based on a timer or only cycle on table button push
+	// L* = simple clear of all LEDs
+	// C* = color request, set current color of all LEDs on table to provided value
+	// A* = animation request, set table animation to provided animation number
+	// I* = interval request, set table animation interval
+	// T* = animation cycle time, used to tell table to either cycle animations based on a timer or only cycle on table button push
+	
+	char data;
+	byte lineComplete = 0;
+	
+	while( Serial1.available() > 0 )
+	{
+		data = (char)Serial1.read();
+		currentLine += data;
+   
+	}
+	
+	if ( debug == 1 && data == '*' ) {
+		Serial.println(currentLine);
+		lineComplete = 1;
+	}
+	
+	// once we got a full command from the serial port, parse it and respond accordingly
+	if ( lineComplete == 1 ) {
+	
+		// Check to see what the request was for the current line
+		
+		// clear LEDs request
+        if (currentLine.endsWith("L*")) {  // turn off all LEDs on /L request
+          clear_all(0, ledCount, display_mem);
+          if ( debug == 1 ) {
+            Serial.print("current line: ");
+            Serial.println(currentLine);
+          }
+        }
+		
+		// set color request
+		if (currentLine.endsWith("C*")) {
 
+          // grab the index of the brightness token in the string
+          byte index_s = currentLine.lastIndexOf(":");
+          byte index_e = currentLine.lastIndexOf("C*");
+          char colorstring[4];
+          String brightnessString = currentLine.substring(index_s + 1, index_e);
+          int16_t len = brightnessString.length();
+          brightnessString.toCharArray(colorstring, len + 1);
+          clear_all(atoi(colorstring), ledCount, display_mem);
+
+          if ( debug == 1 ) {
+            Serial.println(currentLine);
+            Serial.print("string index of token is: ");
+            Serial.println(currentLine.lastIndexOf(":"));
+            Serial.print("string index of end token is: ");
+            Serial.println(currentLine.lastIndexOf("*C"));
+            Serial.print("brightnessString: ");
+            Serial.println(brightnessString);
+            Serial.print("Colorstring: ");
+            Serial.println(colorstring);
+            Serial.print("Color set to: ");
+            Serial.println(atoi(colorstring));
+          }
+        }
+		
+		// to select current animation
+        if (currentLine.endsWith("A*")) {
+
+			// grab the index of the brightness token in the string
+			byte index_s = currentLine.lastIndexOf(":");
+			byte index_e = currentLine.lastIndexOf("A*");
+			char animation[3];
+			String animationString = currentLine.substring(index_s + 1, index_e);
+			//char *colorstring;
+			int16_t len = animationString.length();
+			animationString.toCharArray(animation, len + 1);
+			next_animation(atoi(animation));
+
+
+			if ( debug == 1 ) {
+				Serial.println(currentLine);
+				Serial.print("string index of token is: ");
+				Serial.println(currentLine.lastIndexOf(":"));
+				Serial.print("string index of end token is: ");
+				Serial.println(currentLine.lastIndexOf("*A"));
+				Serial.print("animationString: ");
+				Serial.println(animationString);
+				Serial.print("animation: ");
+				Serial.println(animation);
+			}
+        }
+		
+		// to set animation interval
+		if (currentLine.endsWith("I*")) {
+			
+			// grab the index of the brightness token in the string
+			byte index_s = currentLine.lastIndexOf(":");
+			byte index_e = currentLine.lastIndexOf("I*");
+			char interval[4];
+			String intervalString = currentLine.substring(index_s + 1, index_e);
+			//char *colorstring;
+			int16_t len = intervalString.length();
+			intervalString.toCharArray(interval, len + 1);
+			animation_interval = atoi(interval);
+			
+			if ( debug == 1 ) {
+				Serial.println(currentLine);
+				Serial.print("string index of token is: ");
+				Serial.println(currentLine.lastIndexOf(":"));
+				Serial.print("string index of end token is: ");
+				Serial.println(currentLine.lastIndexOf("*I"));
+				Serial.print("inervalString: ");
+				Serial.println(intervalString);
+				Serial.print("interval: ");
+				Serial.println(interval);
+			}
+			
+		}
+		
+		// to set animation cycling properties
+		if (currentLine.endsWith("T*")) {
+			
+			// format for string will be /T<TRUE/FALSE>*<cycle time in ms>*T
+			
+			// grab the index of the brightness token in the string
+			byte index_s = currentLine.lastIndexOf("&");
+			byte index_e = currentLine.lastIndexOf("T*");
+			char interval[6];
+			String animationString = currentLine.substring(index_s + 1, index_e);
+			//char *colorstring;
+			int16_t len = animationString.length();
+			animationString.toCharArray(interval, len + 1);
+			cycle_time = atoi(interval);
+			
+			// also parse out state of check box to determine if animations cycling is enabled or not
+			index_s = currentLine.lastIndexOf(":");
+			index_e = currentLine.lastIndexOf("&");
+			animationString = currentLine.substring(index_s + 1, index_e);
+			if ( animationString == "TRUE" ) {
+				cycle = 1;
+			} else {
+				cycle = 0;
+			}
+			
+		}
+		
+	
+		// lastly clear the currentLine for next command
+		currentLine = "";
+	}
+
+  /*
   WiFiClient client = server.available();   // listen for incoming clients
 
   if ( debug == 1 && server.status() == 0 ) {
@@ -1848,9 +1939,9 @@ void wifi_client() {
       Serial.println(millis() - requestTimer);
       Serial.println("client disonnected");
     }
-  }
+  } */
+  
 }
-
 
 // setup function for USART0 SPI to run panel instead of main hardware SPI which now runs the wifi shield
 // need this because panel update is interrupt driven SPI in interrupt will fuck up any current communication with wifi shield
@@ -1934,74 +2025,27 @@ void USART0status() {
 }
 
 
-// setup for wifi shield
-void WIFIconfig() {
-
-  // check for the presence of the shield:
-  unsigned long start = millis();
-  while (WiFi.status() == WL_NO_SHIELD)
-  {
-    if ((millis() - start) > 30000)
-    {
-      if ( debug == 1 ) Serial.println("WiFi shield not present");
-      // don't continue:
-      while (true);
-    }
-    delay(500);
-  }
-
-  String fv = WiFi.firmwareVersion();
-  if ( fv != "1.1.0" )
-    if ( debug == 1 ) Serial.println("Please upgrade the firmware");
-
-  // attempt to connect to Wifi network:
-  while ( status != WL_CONNECTED) {
-    if ( debug == 1 ) Serial.print("Attempting to connect to Network named: ");
-    if ( debug == 1 ) Serial.println(ssid);                   // print the network name (SSID);
-
-    // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
-    status = WiFi.begin(ssid, pass);
-    // wait 8 seconds for connection:
-    delay(3000);
-  }
-
-  server.begin();                           // start the web server on port 80
-  server_uptime = millis();
-  printWifiStatus();                        // you're connected now, so print out the status
-
-}
-
-
-
 // setup for BT module, hopefully less complicated than the wifi since it's just being treated as a serial connection
-/*
-void BTconfig()
+void BTconfig(byte debug)
 {
-  pinMode(bluetoothRx, INPUT);
-  pinMode(bluetoothTx, OUTPUT);
-  pinMode(ledPin, OUTPUT);
-  digitalWrite(ledPin, LOW);
- 
-  bluetooth.begin(38400); 
-
+	
+  // serial1 (USART0) used for BT communication, initialize it and set up connection to BT module
+  Serial1.begin(38400); 
   
-  bluetooth.print("\r\n+STWMOD=0\r\n");  // set to slave
-  bluetooth.print("\r\n");
+  Serial1.print("\r\n+STWMOD=0\r\n");  // set to slave
+  Serial1.print("\r\n");
   delay(2000);
-  bluetooth.print("\r\n+INQ=1\r\n");  // set to inquiry
+  //Serial1.print(\r\n+STNA=led_table\r\n");   // set name BT name to "led_table"  
+  Serial1.print("\r\n+INQ=1\r\n");  // set to inquiry
   
-  if( bluetooth.available() > 0 )
-  {
-    int data = bluetooth.read();
-    if( data > 0 ) Serial.print((char)data);
+  if (Serial1.available() > 0 ) {
+	  int data = Serial1.read();
+	  if( data > 0 && debug == 1 ) Serial.print((char)data);
   }
   
   //bluetooth.print("\r\n+STAUTO=1\r\n");  // set to auto pair  Serial.begin(38400);
-  
 
-
-  //initBT();
 }
-*/
+
 
 

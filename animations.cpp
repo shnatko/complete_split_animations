@@ -65,45 +65,35 @@ void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_me
   // start button used to clear array
   if ( start == 0 ) {
 
-    if ( debug == 2 ) {
-		
-		Serial.println("screen output:");
-		int16_t tempary[512];
-		
-		for ( int16_t i = 0; i < ledCount; i++ ) {
-			tempary[i] = 0;
-		}
+	
+	if ( debug == 1 ) Serial.println("screen output:");
+    
+	for ( int16_t i = 0; i < ledCount; i++ ) {
 
-		for ( int16_t i = 0; i < ledCount; i++ ) {
-
-		// if (display_mem[i] > 0) {
+		// if (display_mem[i] > 0) {	
 			// paint_string = String("display_mem[");
 			// paint_string = String(paint_string + i + "] = " + display_mem[i] + ";" );
 			// if (debug == 2 && display_mem[i] > 0  ) {
 			// Serial.println(paint_string);
 			// }
 		// }
-			
-			if ( display_mem[i] > 0 ) {
-				tempary[i+32] = display_mem[i];   //shift entire screen down 1 row before printout
-			}
+		
+		if ( debug == 1 ) {
+			Serial.print(display_mem[i]);
+			Serial.print(", ");
+			Serial.println("done!");
 		}
 		
-		for ( int16_t i = 0; i < ledCount; i++ ) {
-			Serial.print(tempary[i]);
-			Serial.print(", ");
-			display_mem[i] = 0;
-		}
-    }
+		display_mem[i] = 0;
 	
-	Serial.println("done!");
+	}
+  	
+	// clear paint choose state
+	*color_select = 0;
     
-    // clear paint choose state
-    *color_select = 0;
-    
-    // check current button combo
-    code_valid = check_code(current_code, 7, *last_button, code_array);
-    *last_button = 7;
+	// check current button combo
+	code_valid = check_code(current_code, 7, *last_button, code_array);
+	*last_button = 7;
 
   }
 
@@ -2982,7 +2972,7 @@ void life(byte *type, int *iteration, int16_t *display_mem, int16_t ledCount, by
   for ( int16_t i = 0; i < ledCount; i++ ){
     gamestate[i] = newState[i];
 		
-	if ( debug == 1 ) {
+	if ( debug == 2 ) {
 		String debugString = "gamestate[";
 		debugString = String(debugString + i + "]: " + gamestate[i]);
 		Serial.println(debugString);
