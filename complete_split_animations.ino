@@ -96,6 +96,7 @@
  05.17: start of maze generator / solver animation
  07.02: added flag sprite animation for july 4th
  07.15: started BT testing instead of wifi, removed wifi code for this branch
+ 07.19: added option change control for BT commands from Android, will expand for other animations
 
 animation_number        animation
 0                       nes_paint
@@ -131,7 +132,7 @@ TODO:  general code cleanup, add nes controller presence detect, need to add a p
 // control overall flow of pgm
 byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
 int cycle_time = 7500;	       // time in ms to wait between switching to next animation in sequence
-const byte debug = 1;          // set to 1 to get serial data out for debug
+const byte debug = 0;          // set to 1 to get serial data out for debug
 const byte bluetooth = 1;	   // set to 1 to enable BT shield
 const byte cal = 0;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
@@ -1252,9 +1253,7 @@ void next_animation(byte switchto) {
 		color = 0;
 		randomSeed(analogRead(0));
 		random_type = random(0, 2);
-		random_type = 1;
 		firework_count = random(1, 6);
-		firework_count = 4;
 		for ( byte i = 0; i < fadeLeds; i++) {
 			led_to_fade[i] = (32 * random(3, 13)) + random(3, 28); // constrain initial points so fireworks will be fully on panel
 			fw_state[i] = 0;
@@ -1623,6 +1622,7 @@ void bluetooth_client(byte debug) {
 	// A* = animation request, set table animation to provided animation number
 	// I* = interval request, set table animation interval
 	// T* = animation cycle time, used to tell table to either cycle animations based on a timer or only cycle on table button push
+	// O1* = option1.  generic changable option.  the actual function of this option will depend on which animation is currently active
 	
 	char data;
 	byte lineComplete = 0;
@@ -1634,8 +1634,8 @@ void bluetooth_client(byte debug) {
    
 	}
 	
-	if ( debug == 1 && data == '*' ) {
-		Serial.println(currentLine);
+	if ( data == '*' ) {
+		if ( debug == 1 ) Serial.println(currentLine);
 		lineComplete = 1;
 	}
 	
@@ -1760,6 +1760,48 @@ void bluetooth_client(byte debug) {
 			}
 			
 		}
+		
+		// to set generic animation option1 ( varies by current animation, slider based to single value passed  
+		if (currentLine.endsWith("O1*")) {
+			
+			// grab the index of the brightness token in the string
+			byte index_s = currentLine.lastIndexOf(":");
+			byte index_e = currentLine.lastIndexOf("O1*");
+			char dataval[4];
+			String datavalString = currentLine.substring(index_s + 1, index_e);
+			//char *colorstring;
+			int16_t len = datavalString.length();
+			datavalString.toCharArray(dataval, len + 1);
+			
+			// only one implemented w/ option1 value so far
+			switch ( animation_sequence[animation_number]) {
+				
+				case 1: 
+					blink_count = atoi(dataval);
+					if ( debug == 1 ) Serial.println("set led count");
+					break;
+				
+				case 3:
+					gravity = (float)atof(dataval);
+					if ( debug == 1 ) Serial.println("set gravity");
+					break;
+					
+			}
+				
+			if ( debug == 1 ) {
+				Serial.println(currentLine);
+				Serial.print("option1 string index of token is: ");
+				Serial.println(currentLine.lastIndexOf(":"));
+				Serial.print("option1 string index of end token is: ");
+				Serial.println(currentLine.lastIndexOf("*I"));
+				Serial.print("option1 datavalString: ");
+				Serial.println(datavalString);
+				Serial.print("option1 dataval: ");
+				Serial.println(dataval);
+			}
+			
+		}
+
 		
 	
 		// lastly clear the currentLine for next command

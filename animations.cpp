@@ -3055,7 +3055,7 @@ void maze_solve(int16_t *current_cell, byte *endnode, byte *maze_nodes, byte *ma
 		node_col = *current_cell % 15;
 		
 		if ( *type == 0 ) {
-			*animation_interval = 50;
+			//*animation_interval = 50;
 		
 			for ( int16_t i=0; i<512; i++ ) {
 				fade_down(i, 1, display_mem);
@@ -4222,7 +4222,9 @@ void init_maze(byte *maze_nodes, byte *maze_walls, byte *nodestack, char *stack_
 	clear_all(0, ledCount, display_mem);
 	*current_cell = 0;
 	*wall_update = 0;
-	wave_color[1] = random(1,512);
+	//wave_color[1] = random(1,512);
+	wave_color[1] = random(0,8)*8 + random(0,8)*64;
+	if ( wave_color[1] == 0 ) wave_color[1] = random(0,8)*8 + random(0,8)*64;
 	*type = random(0,2);
 	
 	// reset the node array to every cell as unvisited and every wall as in place
