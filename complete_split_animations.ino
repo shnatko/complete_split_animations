@@ -97,7 +97,9 @@
  07.02: added flag sprite animation for july 4th
  07.15: started BT testing instead of wifi, removed wifi code for this branch
  07.19: added option change control for BT commands from Android, will expand for other animations
-
+ 08.08:	added pulldown on nes1 port for presence detect, if no controller is plugged, read 0
+		also added bt communication back to phone to tell it current animation, can use this for other stuff as well eventually
+ 
 animation_number        animation
 0                       nes_paint
 1                       blink_rand_interval
@@ -120,8 +122,8 @@ animation_number        animation
 17						maze
 
 
-TODO:  general code cleanup, add nes controller presence detect, need to add a pull up/down resistor on data input to read value when controller is not plugged in
-
+TODO:  general code cleanup, updated animations
+ 
  */
 
 
@@ -132,12 +134,13 @@ TODO:  general code cleanup, add nes controller presence detect, need to add a p
 // control overall flow of pgm
 byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
 int cycle_time = 7500;	       // time in ms to wait between switching to next animation in sequence
-const byte debug = 0;          // set to 1 to get serial data out for debug
+const byte debug = 1;          // set to 1 to get serial data out for debug
 const byte bluetooth = 1;	   // set to 1 to enable BT shield
 const byte cal = 0;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
 const byte code_array[14] = { 0, 0, 1, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7};
-byte animation_sequence[18] = {0, 4, 99, 99, 5, 6, 7, 8, 1, 17, 11, 99, 99, 99, 14, 99, 0, 99};
+byte animation_sequence[18] = {0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 15, 16, 17, 99, 99, 0, 99};
+byte controller_plugged = 0;   // global for whether or not controller is plugged into port
 
 // static defines
 
@@ -487,11 +490,25 @@ void setup()  {
   pinMode(NES_latch1, OUTPUT);
   pinMode(NES_data1, INPUT);
 
-  // set initial state for NES controller bits
-  NES_clk0_low;
+  
   NES_latch0_low;
-  NES_clk1_low;
+  NES_clk0_low;
+ 
+  // check if there is a controller plugged into port1 ( main NES port )
+  // latch button state into shift reg
+  NES_latch1_high;
+  delayMicroseconds(5);  // need to add some dly, was getting empty readings from one of the controllers
   NES_latch1_low;
+
+  // shift data input from NES controllers
+  for ( byte i = 0; i < 8; i++) {
+    bitWrite(nes_state1, i, digitalRead(NES_data1));
+    NES_clk1_high;
+    NES_clk1_low;
+  }
+  
+  if ( nes_state1 > 0 ) controller_plugged = 1;
+
 
   // clear initial state of display memory and set up stuff for animations
   //init stuff for animations
@@ -1086,6 +1103,8 @@ void TC3_Handler() {
     NES_clk0_low;
     NES_clk1_low;
   }
+  
+  if (nes_state1 == 0 ) nes_state1 = 255;
 
 }
 
@@ -1133,6 +1152,7 @@ void next_animation(byte switchto) {
 	
   byte random_shape = 0;
   byte temp_color = 0;
+  char *animation_name = "test name is long";
 
   if ( switchto == 99 ) {
     // increment through the animation sequence array, if we hit the end of the array, reset
@@ -1164,6 +1184,7 @@ void next_animation(byte switchto) {
 		gameOver = 0;
 		animation_interval = 100;
 		clear_all(0, ledCount, display_mem);
+		animation_name = "nes paint";
 		break;
 	
 	case 1:
@@ -1172,6 +1193,7 @@ void next_animation(byte switchto) {
 		nes_on();
 		blink_count = random(10, 70);
 		animation_interval = random(20, 70);
+		animation_name = "random blink";
 		break;
 
     case 2:
@@ -1193,6 +1215,7 @@ void next_animation(byte switchto) {
 			shape[i] = random_shape;
 		}
 		animation_interval = 30;
+		animation_name = "bounce";
 		break;
 
     case 3:
@@ -1229,6 +1252,7 @@ void next_animation(byte switchto) {
 		}
 	
 		animation_interval = 45;
+		animation_name = "rain";
 		break;
 	
 	case 4:
@@ -1242,6 +1266,7 @@ void next_animation(byte switchto) {
 		random_type = random(0, 3);
 		wave_color[0] = random(0,2);
 		animation_interval = 5;
+		animation_name = "fill";
 		break;
 
     case 5:
@@ -1260,6 +1285,8 @@ void next_animation(byte switchto) {
 			wait_interval[i] = fwait_min;
 		}
 		animation_interval = 50;  //100
+		animation_name = "random fade";
+		if ( random_type == 1 ) animation_name = "fireworks";
 		break;
 
     case 6:
@@ -1276,6 +1303,7 @@ void next_animation(byte switchto) {
 		color = 0;
 		angle = 0;
 		animation_interval = 50;
+		animation_name = "wave";
 		break;
 
     case 7:
@@ -1294,7 +1322,7 @@ void next_animation(byte switchto) {
 			animation_interval = random(30, 150);
 			cur_x[0] = random(1, 6);
 		}
-	
+		animation_name = "lines";
 		break;
 
     case 8:
@@ -1311,6 +1339,7 @@ void next_animation(byte switchto) {
 		fade_color[0] = random(1, 512);
 		fade_color[1] = random(1, 512);
 		animation_interval = 10;
+		animation_name = "chaser";
 		break;
 
     case 9:
@@ -1344,7 +1373,7 @@ void next_animation(byte switchto) {
 		for ( byte i=0; i<128; i++ ) {
 			ir_cal_on[i] = temp_cal_on[i];
 		}
-		
+		animation_name = "sense";
 		break;
 
     case 10:
@@ -1369,6 +1398,7 @@ void next_animation(byte switchto) {
 	
 		//text_color = random(1,512);
 		animation_interval = 25;
+		animation_name = "text scroll";
 		break;
 	
     case 11:
@@ -1377,6 +1407,7 @@ void next_animation(byte switchto) {
 		mode_time = millis();
 		nes_on();
 		animation_interval = 100;
+		animation_name = "sprite";
 		break;
 
     case 12:
@@ -1385,6 +1416,7 @@ void next_animation(byte switchto) {
 		stopwatch_time = 0;
 		nes_on();
 		animation_interval = 50;
+		animation_name = "stopwatch";
 		break;
 
     case 13:
@@ -1404,6 +1436,7 @@ void next_animation(byte switchto) {
 		pauseState = 0;
 		gameOver = 0;
 		animation_interval = 100;
+		animation_name = "tetris!";
 		break;
       
 	case 15:
@@ -1432,6 +1465,7 @@ void next_animation(byte switchto) {
 		foodmode = 0;  // one pellet mode
 		newFood(snake1, snake2, snakeLength, &food1, &food2, foodmode, 0 );
 		animation_interval = 100;
+		animation_name = "snake";
 		break;
 		
 	case 16:
@@ -1442,6 +1476,7 @@ void next_animation(byte switchto) {
 		animation_interval = 50;
 		wave_color[0] = random(1,512);
 		init_life(gamestate, &iteration, ledCount, wave_color);
+		animation_name = "life";
 		break;
 		
 	case 17:
@@ -1453,8 +1488,15 @@ void next_animation(byte switchto) {
 		wave_color[0] = 3;
 		wave_color[1] = random(1,512);
 		init_maze(maze_nodes, maze_walls, nodestack, &stack_index, ledCount, display_mem, &current_cell, wave_color, &random_type, &wall_update, debug);
+		animation_name = "maze";
 	
 	}
+	
+	// at end, transmit the current animation number over the BT connection
+	// would also like to transmit animation interval and animation type back to phone, need to figure out how
+	if (bluetooth == 1 ) Serial1.write(animation_name);
+	
+	
 }
 
 // calibration function for IR array
@@ -1481,7 +1523,7 @@ void calibrate(byte caltype) {
   if ( caltype == 1 ) {
     unsigned long cal_prev_millis = 0;
 
-	/*
+	
     for ( int16_t j = 0; j < 512; j++ ) {
 
       // set board to current led color/brightness
@@ -1498,12 +1540,12 @@ void calibrate(byte caltype) {
         ir_cal_on[i] = max(ir_sense_data[i], ir_cal_on[i]);
       }
 
-    }*/
+    }
 
 
     // second calibratoin type: instead of turning on all LEDs at once, turn on only the 4 for each node to full brightness immediately
     // doesn't really work.
-    
+    /*
     int term0 = 0;
     for ( byte i=0; i<=127; i++ ) {
 
@@ -1524,7 +1566,7 @@ void calibrate(byte caltype) {
       // threshold is simple max of read IR sense value across all LED brightness, this also takes ambient light into account
       ir_cal_on[i] = max(ir_sense_data[i], ir_cal_on[i]);
 
-    }
+    }*/
 	
 	/*
 
@@ -1603,13 +1645,16 @@ void ir_off() {
 }
 
 void nes_on() {
-  REG_TC1_IER0 = 0b00010000; // enable interrupt on counter=rc
-  REG_TC1_IDR0 = 0b11101111; // disable other interrupts
+	
+	if ( controller_plugged == 1 ) {
+		REG_TC1_IER0 = 0b00010000; // enable interrupt on counter=rc
+		REG_TC1_IDR0 = 0b11101111; // disable other interrupts
+	}
 }
 
 void nes_off() {
-  REG_TC1_IER0 = 0b00000000; // enable interrupt on counter=rc
-  REG_TC1_IDR0 = 0b11111111; // disable other interrupts
+	REG_TC1_IER0 = 0b00000000; // enable interrupt on counter=rc
+	REG_TC1_IDR0 = 0b11111111; // disable other interrupts
 }
 
 // bluetooth client, this will be used to process request from bluetooth for panel control
@@ -1707,10 +1752,10 @@ void bluetooth_client(byte debug) {
 			}
         }
 		
-		// to set animation interval
+		// to set animation interval  format will be ":<interval>*I"
 		if (currentLine.endsWith("I*")) {
 			
-			// grab the index of the brightness token in the string
+			// grab the index of the token in the string
 			byte index_s = currentLine.lastIndexOf(":");
 			byte index_e = currentLine.lastIndexOf("I*");
 			char interval[4];
@@ -1737,9 +1782,9 @@ void bluetooth_client(byte debug) {
 		// to set animation cycling properties
 		if (currentLine.endsWith("T*")) {
 			
-			// format for string will be /T<TRUE/FALSE>*<cycle time in ms>*T
+			// format for string will be ":<TRUE/FALSE>&<cycle time in ms>*T"
 			
-			// grab the index of the brightness token in the string
+			// grab the index of the token in the string
 			byte index_s = currentLine.lastIndexOf("&");
 			byte index_e = currentLine.lastIndexOf("T*");
 			char interval[6];
@@ -1753,10 +1798,22 @@ void bluetooth_client(byte debug) {
 			index_s = currentLine.lastIndexOf(":");
 			index_e = currentLine.lastIndexOf("&");
 			animationString = currentLine.substring(index_s + 1, index_e);
-			if ( animationString == "TRUE" ) {
+			if ( animationString == "true" ) {
 				cycle = 1;
 			} else {
 				cycle = 0;
+			}
+			
+			if ( debug == 1 ) {
+				Serial.println(currentLine);
+				Serial.print("option string index of start token is: ");
+				Serial.println(currentLine.lastIndexOf(":"));
+				Serial.print("option string index of end token is: ");
+				Serial.println(currentLine.lastIndexOf("*T"));
+				Serial.print("option1 animationString: ");
+				Serial.println(animationString);
+				Serial.print("option1 interval: ");
+				Serial.println(interval);
 			}
 			
 		}

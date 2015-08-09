@@ -33,6 +33,13 @@
     03.07.15  First pass at getting snake game working
 	04.02.15  Snake improvements, 2 players, border wrap added
     05.01.15  Added game of life
+	
+	
+	TODOs:
+	
+	 bounce:  for small # of balls, wall strike triggers whole screen on/fade down
+	 rain:    added upside-down mode, also stacking mode
+	 
 */
 
 #include "animations.h"
@@ -185,7 +192,7 @@ void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_me
 
   }
 
-  if ( debug == 3 ) {
+  if ( debug == 4 ) {
 	for ( byte i=0; i<14; i++ ) {
 		Serial.print(current_code[i]);
 	}
