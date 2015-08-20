@@ -134,7 +134,7 @@ TODO:  general code cleanup, updated animations
 // control overall flow of pgm
 byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
 int cycle_time = 7500;	       // time in ms to wait between switching to next animation in sequence
-const byte debug = 1;          // set to 1 to get serial data out for debug
+const byte debug = 0;          // set to 1 to get serial data out for debug
 const byte bluetooth = 1;	   // set to 1 to enable BT shield
 const byte cal = 0;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
@@ -1152,7 +1152,9 @@ void next_animation(byte switchto) {
 	
   byte random_shape = 0;
   byte temp_color = 0;
-  char *animation_name = "test name is long";
+  //char *animation_name = "test name is long";
+  String animation_name = "test name is long";
+  char nameToSend[] = "test name is long";
 
   if ( switchto == 99 ) {
     // increment through the animation sequence array, if we hit the end of the array, reset
@@ -1494,7 +1496,20 @@ void next_animation(byte switchto) {
 	
 	// at end, transmit the current animation number over the BT connection
 	// would also like to transmit animation interval and animation type back to phone, need to figure out how
-	if (bluetooth == 1 ) Serial1.write(animation_name);
+	if (bluetooth == 1 ) {
+		
+		animation_name += "&";
+		animation_name += String(animation_sequence[animation_number]);
+		animation_name += "&";
+		animation_name += String(random_type);
+		animation_name += "&";
+		animation_name += String(animation_interval);
+		animation_name.toCharArray(nameToSend, animation_name.length()+1);
+		Serial1.write(nameToSend);
+		//Serial1.write("test send");
+		
+		if (debug > 0 ) Serial.println(nameToSend);
+	}
 	
 	
 }
@@ -1667,6 +1682,7 @@ void bluetooth_client(byte debug) {
 	// A* = animation request, set table animation to provided animation number
 	// I* = interval request, set table animation interval
 	// T* = animation cycle time, used to tell table to either cycle animations based on a timer or only cycle on table button push
+	// R* = random type for animation, used to vary settings within a particular animation
 	// O1* = option1.  generic changable option.  the actual function of this option will depend on which animation is currently active
 	
 	char data;
@@ -1814,6 +1830,33 @@ void bluetooth_client(byte debug) {
 				Serial.println(animationString);
 				Serial.print("option1 interval: ");
 				Serial.println(interval);
+			}
+			
+		}
+		
+		// to set animation type  format will be ":<type>*R"
+		if (currentLine.endsWith("R*")) {
+			
+			// grab the index of the token in the string
+			byte index_s = currentLine.lastIndexOf(":");
+			byte index_e = currentLine.lastIndexOf("R*");
+			char type[4];
+			String typeString = currentLine.substring(index_s + 1, index_e);
+			//char *colorstring;
+			int16_t len = typeString.length();
+			typeString.toCharArray(type, len + 1);
+			random_type = atoi(type);
+			
+			if ( debug == 1 ) {
+				Serial.println(currentLine);
+				Serial.print("string index of token is: ");
+				Serial.println(currentLine.lastIndexOf(":"));
+				Serial.print("string index of end token is: ");
+				Serial.println(currentLine.lastIndexOf("*I"));
+				Serial.print("typeString: ");
+				Serial.println(typeString);
+				Serial.print("random type: ");
+				Serial.println(type);
 			}
 			
 		}
