@@ -342,16 +342,17 @@ byte firework_count = 3;
 
 
 // variables for bounce animation
-const byte balls = 9;
-byte location_x[balls];
-byte location_y[balls];
-byte direction_x[balls];   // 1 = right, 0 = left
-byte direction_y[balls];   // 1 = down, 0 = up
-byte speed_x[balls];
-byte speed_y[balls];
+byte balls = 3;
+const byte ball_max = 40;
+byte location_x[ball_max];
+byte location_y[ball_max];
+byte direction_x[ball_max];   // 1 = right, 0 = left
+byte direction_y[ball_max];   // 1 = down, 0 = up
+byte speed_x[ball_max];
+byte speed_y[ball_max];
 byte interval_counter = 0;
-int16_t ball_color[balls];
-byte shape[balls];
+int16_t ball_color[ball_max];
+byte shape[ball_max];
 
 //variables for static/rfill
 byte fill_dir = 0;
@@ -382,10 +383,12 @@ short cur_y[8] = {0, 8, 0, 8, 0, 8, 0, 8};
 byte drop_state[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 byte drop_pos_y[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 byte drop_wait_count[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+byte drop_stack_top[32] = {16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16,16};
 int16_t drop_color[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 const byte drop_wait_time = 35;
 byte drop_fall_timer[32] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 float gravity = 0.1;
+byte drop_stack_limit[32] = {5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5};
 
 //variable for text scrolling
 String scrollText = "Happy 4th of July!!";
@@ -786,12 +789,12 @@ void loop()  {
 			break;
 		case 2:
 			// bounce
-			bounce(random_type, display_mem, balls, location_x, location_y, direction_x, direction_y, speed_x, speed_y, &interval_counter, ball_color, shape, ledCount, nes_state1, &animation_interval );
+			bounce(random_type, display_mem, &balls, ball_max, location_x, location_y, direction_x, direction_y, speed_x, speed_y, &interval_counter, ball_color, shape, ledCount, nes_state1, &animation_interval );
 			break;
 		case 3:
 			// pong
 			//pong( display_mem, ledCount, nes_state1, &nes_location, &paddle_width, &score, direction_x, direction_y, location_x, location_y, speed_x, speed_y, &interval_counter, ball_color, debug );
-			rain(0, display_mem, nes_state1, drop_state, drop_pos_y, drop_wait_count, drop_color, drop_wait_time, drop_fall_timer, &gravity, debug );
+			rain(random_type, display_mem, nes_state1, drop_state, drop_pos_y, drop_wait_count, drop_color, drop_wait_time, drop_fall_timer, &gravity, drop_stack_top, drop_stack_limit, debug );
 			break;
 		case 4:
 			// clear all ( random static color )
@@ -1173,6 +1176,8 @@ void next_animation(byte switchto) {
   nes_off();
   ir_off();
   //Serial.end();
+  
+  byte color_mode;
 
   switch (animation_sequence[animation_number]) {
 
@@ -1204,7 +1209,7 @@ void next_animation(byte switchto) {
 		nes_on();
 		random_type = random(0, 4);
 		random_shape = random(0, 3);
-		for ( byte i = 0; i < balls; i++ ) {
+		for ( byte i = 0; i < ball_max; i++ ) {
 			direction_x[i] = random(0, 2);
 			direction_y[i] = random(0, 2);
 			location_x[i] = random(1, 30);
@@ -1240,9 +1245,10 @@ void next_animation(byte switchto) {
 		nes_on();
 		temp_color = random(1, 512);
 		random_type = random(0, 2);
+		color_mode = random(0,2);
 		for ( byte i = 0; i < 32; i++ ) {
 			drop_wait_count[i] = random(1, drop_wait_time);
-			if ( random_type == 0 ) {
+			if ( color_mode == 0 ) {
 			drop_color[i] = temp_color;
 			} else {
 			drop_color[i] = random(1, 512);
@@ -1250,6 +1256,8 @@ void next_animation(byte switchto) {
 			drop_state[i] = 0;
 			drop_pos_y[i] = 0;
 			drop_fall_timer[i] = 0;
+			drop_stack_top[i] = 16;
+			drop_stack_limit[i] = random(3,14);
 			gravity = (random(1, 11) / 10.0);
 		}
 	

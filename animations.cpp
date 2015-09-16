@@ -26,6 +26,7 @@
    14                      it's a secret to everyone
    15                      snake
    16                      life
+   17					   maze
   
     Date      Comment
     02.21.15  Created initial version and moved some animations over 
@@ -33,6 +34,7 @@
     03.07.15  First pass at getting snake game working
 	04.02.15  Snake improvements, 2 players, border wrap added
     05.01.15  Added game of life
+	09.15.15  Bunch of tweaks, specifically added line draw mode for bounce animation
 	
 	
 	TODOs:
@@ -290,13 +292,14 @@ void blink_rand_interval(byte type, byte *blink_count, int16_t ledCount, int16_t
 
 // #################################################################
 // 2: bouncing balls
-void bounce(byte type, int16_t *display_mem, byte balls, byte *location_x, byte *location_y, byte *direction_x, byte *direction_y, byte *speed_x, byte *speed_y, byte *interval_counter, int16_t *ball_color, byte *shape, int16_t ledCount, byte nes_state1, int16_t *animation_interval) {
+void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *location_x, byte *location_y, byte *direction_x, byte *direction_y, byte *speed_x, byte *speed_y, byte *interval_counter, int16_t *ball_color, byte *shape, int16_t ledCount, byte nes_state1, int16_t *animation_interval) {
 
   /*  type info:
       type = 0, single pixels bouncing around, if count < 25, fade down, otherwise just clear previous position
-      type = 1, use shape setting, shapes so far include doughnut, circle, and square, no fade, just clear prev. position
-      type = 2, use shape setting, but persistence setting, no clear
-      type = 3, use shape setting, but fade down shape after moving it
+	  type = 1, single pixel with lines connecting.  start with just 2 pixels first
+      type = 2, use shape setting, shapes so far include doughnut, circle, and square, no fade, just clear prev. position
+      type = 3, use shape setting, but persistence setting, no clear
+      type = 4, use shape setting, but fade down shape after moving it
   */
 
   byte flash_top = 0;
@@ -308,10 +311,10 @@ void bounce(byte type, int16_t *display_mem, byte balls, byte *location_x, byte 
   byte right_edge = 31;
   byte top = 0;
   byte bottom = 15;
-  byte a, b, sel, start = 1;
+  byte a, b, up, down, sel, start = 1;
 
   //if type is 1, we're using bigger balls, adjust edges accordingly
-  if ( type > 0 ) {
+  if ( type > 1 ) {
     left_edge = 1;
     right_edge = 29;
     top = 2;
@@ -319,20 +322,20 @@ void bounce(byte type, int16_t *display_mem, byte balls, byte *location_x, byte 
   }
 
   // fade down previous led position when ball count <=25
-  if ( (balls <= 25 && type == 0) || type == 3 ) {
+  if ( (*balls <= 25 && type == 0) || type == 4 ) {
     for ( int16_t j = 0; j < ledCount; j++) {
       fade_down(j, 1, display_mem);
     }
   }
 
-  for (int16_t i = 0; i < balls; i++ ) {
+  for (int16_t i = 0; i < *balls; i++ ) {
 
-    //clear last frame ( no fade ) for ball count > 2
-    if ( balls > 25 || type == 1 ) {
+    //clear last frame ( no fade ) for ball count > 25 or non-fade type
+    if ( ( *balls > 25 && type != 1 ) || type == 2 ) {
 
       int16_t ball_loc = location_x[i] + (32 * location_y[i]);
 
-      if ( type == 1 ) {
+      if ( type == 2 ) {
 
         // clear center of ball
         if ( shape[i] == 0 || shape[i] == 2 ) {
@@ -366,6 +369,17 @@ void bounce(byte type, int16_t *display_mem, byte balls, byte *location_x, byte 
       }
 
     }
+	
+	if ( type == 1 ) {
+		
+		// clear whole line
+		draw_line(location_x[0], location_y[0], location_x[1], location_y[1], 0, display_mem );
+		// second line
+		if ( *balls > 3 ) {
+			draw_line(location_x[2], location_y[2], location_x[3], location_y[3], 0, display_mem );
+		}
+		
+	}
 
 
     // calculate new X position if interval counter is multiple of ball's speed rating ( high speed rating means lower update interval in this case )
@@ -440,7 +454,7 @@ void bounce(byte type, int16_t *display_mem, byte balls, byte *location_x, byte 
     }
     */
 
-    if ( type > 0) {
+    if ( type > 1) {
       //draw 12-pixel ball based on current location
       int16_t ball_loc = location_x[i] + (32 * location_y[i]);
 
@@ -470,9 +484,21 @@ void bounce(byte type, int16_t *display_mem, byte balls, byte *location_x, byte 
         display_mem[ball_loc + 34] = ball_color[i];
       }
 
-    } else {
+    } else if (type == 0) {
       display_mem[location_x[i] + (32 * location_y[i])] = ball_color[i];
-    }
+	  
+    // new twist, draw a line between 2 balls ( start with just 2 for now, maybe expand later
+	} else if ( type == 1 ) {
+	
+		draw_line(location_x[0], location_y[0], location_x[1], location_y[1], ball_color[0], display_mem );
+
+				
+		// second line
+		if ( *balls > 3 ) {
+			draw_line(location_x[2], location_y[2], location_x[3], location_y[3], ball_color[2], display_mem );
+		}
+		
+	}
 
   }
 
@@ -488,6 +514,8 @@ void bounce(byte type, int16_t *display_mem, byte balls, byte *location_x, byte 
   b = bitRead(nes_state1, 1);
   sel = bitRead(nes_state1, 2);
   start = bitRead(nes_state1, 3);
+  up = bitRead(nes_state1, 4);
+  down = bitRead(nes_state1, 5);
 
   if ( a == 0 ) {
     *animation_interval = *animation_interval - 1;
@@ -500,13 +528,23 @@ void bounce(byte type, int16_t *display_mem, byte balls, byte *location_x, byte 
   }
 
   if ( sel == 0 ) {
-    for ( byte i = 0; i < balls; i++ ) {
+    for ( byte i = 0; i < *balls; i++ ) {
       ball_color[i] = random(0, 512);
     }
   }
 
   if ( start == 0 ) {
     clear_all(0, ledCount, display_mem);
+  }
+	
+  if ( up == 0 ) {
+    *balls = *balls + 1;
+	*balls = constrain(*balls, 3,39);
+  }
+  
+  if ( down == 0 ) {
+    *balls = *balls - 1;
+	*balls = constrain(*balls, 3,39);
   }
 
 
@@ -642,123 +680,196 @@ void pong(int16_t *display_mem, int16_t ledCount, byte nes_state1, int16_t *nes_
 // #################################################################
 // 3: rain animation, led will fade in at top then "drip" down
 
-void rain(byte type, int16_t *display_mem, byte nes_state1, byte *drop_state, byte *drop_pos_y, byte *drop_wait_count, int16_t *drop_color, byte drop_wait_time, byte *drop_fall_timer, float *gravity, byte debug) {
+void rain(byte type, int16_t *display_mem, byte nes_state1, byte *drop_state, byte *drop_pos_y, byte *drop_wait_count, int16_t *drop_color, byte drop_wait_time, byte *drop_fall_timer, float *gravity, byte *drop_stack_top, byte *drop_stack_limit, byte debug) {
 
-  byte fade_on = 0;
-  byte fade_off = 0;
-  byte a, b = 1;
+	/* type info 
+	0: rain drop w/ fade at bottom of table
+	1: rain drop w/ stacking at bottom to column fade when stack target hit
+	*/
 
-  if ( type == 0 ) {  // basic random column raindrop
+	byte fade_on = 0;
+	byte fade_off = 0;
+	byte a, b = 1;
+	byte drop_done;
 
-    //byte active_col = random(0,32);
-
-    for ( byte active_col = 0; active_col < 32; active_col++ ) {
-
-      if ( debug == 2 ) {
-        Serial.print(active_col);
-        Serial.print(" state: ");
-        Serial.println(drop_state[active_col]);
-      }
-
-      switch (drop_state[active_col]) {
-
-        case 0:  // drop is in idle state, decrement it's counter
-          if ( drop_wait_count[active_col] > 0 ) {
-            drop_wait_count[active_col]--;
-          } else if ( drop_wait_count[active_col] == 0 ) {   // wait count hit zero, move to fade in state
-            drop_wait_count[active_col] = random(1, drop_wait_time);
-            drop_state[active_col] = 1;
-          }
-          break;
-
-        case 1: // drop is in fade in state, fade up LED brightness to max color
-
-          fade_on = fade_up(active_col, drop_color[active_col], display_mem);
-
-          if (fade_on == 1) {
-            drop_wait_count[active_col]--;  				// adding random wait at full brightness before drop fall
-            if ( drop_wait_count[active_col] == 0 ) {
-              drop_state[active_col] = 2;
-              drop_fall_timer[active_col] = 0;
-              drop_wait_count[active_col] = random(1, drop_wait_time);
-            }
-          }
-          break;
-
-        case 2: // drop is in fall state
-          if ( drop_pos_y[active_col] < 15 ) {
-
-            //clear current drop location
-            display_mem[(32 * drop_pos_y[active_col]) + active_col] = 0;
-
-
-            //  below method used equation to determine position based on fall timer comment out for now, calculate d for given t
-            // calculate new freefall location based on drop time and acceleration constant
-            float displacement = 0.5 * *gravity * pow(drop_fall_timer[active_col], 2);
-            drop_pos_y[active_col] = constrain(int(displacement), 0, 15);
-
-            display_mem[(32 * drop_pos_y[active_col]) + active_col] = drop_color[active_col];
-
-            // bump drop time by 1 "unit" for next time through
-            drop_fall_timer[active_col]++;
-
-
-            /*
-            // new method, calculate t for a given d and turn on that LED if sufficient time has passed to light it up, hopefully this method will illuminate each LED in the fall
-
-            //for each drop position, calculate time when drop should be at that point.  if the current time is greater than the time for the drop to be at location, light up led
-            float droptime = 0;
-            byte ondrop = 0;
-            for ( byte i=0; i<16; i++) {
-            droptime = sqrt((2*i)/gravity);
-            if ( drop_fall_timer[active_col] > droptime ) ondrop = i;
-            }
-
-            //once we have the lowest drop, turn that LED on and increment the drop timer
-            drop_pos_y[active_col] = ondrop;
-            display_mem[(32*drop_pos_y[active_col]) + active_col] = drop_color[active_col];
-            drop_fall_timer[active_col]++;
-            */
-
-
-          } else if ( drop_pos_y[active_col] == 15 ) {
-            drop_pos_y[active_col] = 15;
-            drop_state[active_col] = 3;
-            display_mem[(32 * drop_pos_y[active_col]) + active_col] = drop_color[active_col];
-          }
-          break;
-
-        case 3: // drop is at bottom, fade it back down now
-
-          fade_off = fade_down((32 * drop_pos_y[active_col]) + active_col, 1, display_mem);
-
-          if (fade_off == 1 ) {
-            drop_state[active_col] = 0;
-            drop_pos_y[active_col] = 0;
-            drop_fall_timer[active_col] = 0;
-          }
-
-          break;
-      }
-
-    }
-  }
-
-  // lastly, check NES controller input buttons to change gravity strength
-  a = bitRead(nes_state1, 0);
-  b = bitRead(nes_state1, 1);
-
-  if ( a == 0 ) {
-    *gravity = *gravity + 0.05;
-    *gravity = constrain(*gravity, 0.05, 1.8);
-  }
-
-  if ( b == 0 ) {
-    *gravity = *gravity - 0.05;
-    *gravity = constrain(*gravity, 0.05, 1.8);
-  }
-
-
+	for ( byte active_col = 0; active_col < 32; active_col++ ) {
+	
+		if ( debug == 2 ) {
+			Serial.print(active_col);
+			Serial.print(" state: ");
+			Serial.println(drop_state[active_col]);
+		}
+		
+		drop_done = 0;
+	
+		switch (drop_state[active_col]) {
+	
+			case 0:  // drop is in idle state, decrement it's counter
+				if ( drop_wait_count[active_col] > 0 ) {
+					drop_wait_count[active_col]--;
+				} else if ( drop_wait_count[active_col] == 0 ) {   // wait count hit zero, move to fade in state
+					drop_wait_count[active_col] = random(1, drop_wait_time);
+					drop_state[active_col] = 1;
+				}
+			break;
+	
+			case 1: // drop is in fade in state, fade up LED brightness to max color
+	
+				fade_on = fade_up(active_col, drop_color[active_col], display_mem);
+		
+				if (fade_on == 1) {
+					drop_wait_count[active_col]--;  				// adding random wait at full brightness before drop fall
+					if ( drop_wait_count[active_col] == 0 ) {
+					drop_state[active_col] = 2;
+					drop_fall_timer[active_col] = 0;
+					drop_wait_count[active_col] = random(1, drop_wait_time);
+					}
+			}
+			break;
+	
+			case 2: // drop is in fall state
+			
+				if ( type == 0 ) {   // type0: drop falls to bottom and fades out
+				
+					if ( drop_pos_y[active_col] < 15 ) {
+			
+						//clear current drop location
+						display_mem[(32 * drop_pos_y[active_col]) + active_col] = 0;
+			
+			
+						//  below method used equation to determine position based on fall timer comment out for now, calculate d for given t
+						// calculate new freefall location based on drop time and acceleration constant
+						float displacement = 0.5 * *gravity * pow(drop_fall_timer[active_col], 2);
+						drop_pos_y[active_col] = constrain(int(displacement), 0, 15);
+			
+						display_mem[(32 * drop_pos_y[active_col]) + active_col] = drop_color[active_col];
+			
+						// bump drop time by 1 "unit" for next time through
+						drop_fall_timer[active_col]++;
+			
+			
+						/*
+						// new method, calculate t for a given d and turn on that LED if sufficient time has passed to light it up, hopefully this method will illuminate each LED in the fall
+			
+						//for each drop position, calculate time when drop should be at that point.  if the current time is greater than the time for the drop to be at location, light up led
+						float droptime = 0;
+						byte ondrop = 0;
+						for ( byte i=0; i<16; i++) {
+						droptime = sqrt((2*i)/gravity);
+						if ( drop_fall_timer[active_col] > droptime ) ondrop = i;
+						}
+			
+						//once we have the lowest drop, turn that LED on and increment the drop timer
+						drop_pos_y[active_col] = ondrop;
+						display_mem[(32*drop_pos_y[active_col]) + active_col] = drop_color[active_col];
+						drop_fall_timer[active_col]++;
+						*/
+			
+			
+					} else if ( drop_pos_y[active_col] == 15 ) {
+						drop_pos_y[active_col] = 15;
+						drop_state[active_col] = 3;
+						display_mem[(32 * drop_pos_y[active_col]) + active_col] = drop_color[active_col];
+					}
+					
+				} else if ( type == 1 ) {  // type1: drops accumalte into stack and when reach certain height, stack fades
+					
+					if ( drop_pos_y[active_col] < drop_stack_top[active_col] ) {
+		
+						//clear current drop location
+						display_mem[(32 * drop_pos_y[active_col]) + active_col] = 0;
+			
+			
+						//  below method used equation to determine position based on fall timer comment out for now, calculate d for given t
+						// calculate new freefall location based on drop time and acceleration constant
+						float displacement = 0.5 * *gravity * pow(drop_fall_timer[active_col], 2);
+										
+						// if displacement from top is greater than the current stop of the stack, that means the drop is not at the "bottom" of it's column and should be added to the drop stack
+						if ( constrain(int(displacement), 0, 16 ) >= drop_stack_top[active_col] ) {
+							
+							//light up next location in stack and move the stack top up one level, also this drop is now done and we can get a new one
+							drop_stack_top[active_col]--;
+							display_mem[(32 * drop_stack_top[active_col]) + active_col] = drop_color[active_col];
+							drop_done = 1;						
+							
+						} else {
+							drop_pos_y[active_col] = constrain(int(displacement), 0, 15);
+							display_mem[(32 * drop_pos_y[active_col]) + active_col] = drop_color[active_col];
+							
+							// bump drop time by 1 "unit" for next time through
+							drop_fall_timer[active_col]++;
+						}
+						
+						// if the current drop is done we have 2 options:
+						// 1) the stack is not full yet, so get another drop and repeat
+						// 2) the stack is full, at this point fade the stack down then start all over
+						
+						if ( drop_done == 1 && drop_stack_top[active_col] > drop_stack_limit[active_col] ) {
+							
+							// get a new drop
+							drop_state[active_col] = 0;
+							drop_pos_y[active_col] = 0;
+							drop_fall_timer[active_col] = 0;
+							
+						} else if ( drop_done == 1 && drop_stack_top[active_col] <= drop_stack_limit[active_col] ) {
+							
+							// move the state of the drop column to the fade down state now, do not add more drops
+							drop_state[active_col] = 3;
+							drop_pos_y[active_col] = 0;
+						
+						}
+				
+					}
+				
+				}						
+				
+			break;
+	
+			case 3: // drop is at bottom, fade it back down now
+	
+				if ( type == 0 ) {  // fade single drop 
+					
+					fade_off = fade_down((32 * drop_pos_y[active_col]) + active_col, 1, display_mem);
+	
+					if (fade_off == 1 ) {
+						drop_state[active_col] = 0;
+						drop_pos_y[active_col] = 0;
+						drop_fall_timer[active_col] = 0;
+					}
+				
+				} else if ( type == 1 ) {  // fade whole column
+					
+					for ( byte i = 15; i >= drop_stack_limit[active_col]; i-- ) {
+						fade_off = fade_down((32*i) + active_col, 1, display_mem);
+					}
+	
+					if (fade_off == 1 ) {
+						drop_state[active_col] = 0;
+						drop_pos_y[active_col] = 0;
+						drop_fall_timer[active_col] = 0;
+						drop_stack_top[active_col] = 16;
+					}	
+				}
+	
+			break;
+		}
+	}
+		
+	
+	// lastly, check NES controller input buttons to change gravity strength
+	a = bitRead(nes_state1, 0);
+	b = bitRead(nes_state1, 1);
+	
+	if ( a == 0 ) {
+		*gravity = *gravity + 0.05;
+		*gravity = constrain(*gravity, 0.05, 1.8);
+	}
+	
+	if ( b == 0 ) {
+		*gravity = *gravity - 0.05;
+		*gravity = constrain(*gravity, 0.05, 1.8);
+	}
+	
 
   //lastly check if current time is greater than color cycle interval and if so, change fade color.. fix this.  this breaks things
   /*
@@ -778,6 +889,12 @@ void rain(byte type, int16_t *display_mem, byte nes_state1, byte *drop_state, by
 // 4: random screen fill
 void rfill ( byte type, int16_t *display_mem, int16_t ledCount, byte nes_state1, byte *fill_dir, int16_t *rfill_array, int16_t *current_pos, int16_t *wave_color, int16_t *sense_color_on, int16_t *animation_interval ) {
 
+	/* types 
+	0: static color fill
+	1: random color for each fill cycle
+	2: random collor on 1/2 table full
+	*/
+
   byte a, b, up, sel, start = 1;
 
   // screen is not full yet, fill up
@@ -789,7 +906,7 @@ void rfill ( byte type, int16_t *display_mem, int16_t ledCount, byte nes_state1,
     }
     *current_pos = *current_pos + 1;
 	
-	// for type 1, change fill color halfway up the fill
+	// for type 2, change fill color halfway up the fill
 	if ( type == 2 && *current_pos == 255 ) *sense_color_on = random(1,512);
   }
 
@@ -934,7 +1051,7 @@ void random_fade(byte type, int16_t *display_mem, int16_t ledCount, byte fadeLed
 
         //start firework animation
         fw_state[i] = 1;
-        byte color = random(0, 7);
+        int16_t color = random(0, 7);
         if (color == 0) {
           color = 448;  // red
         } else if (color == 1) {
@@ -1503,6 +1620,13 @@ void wave(byte type, int16_t *display_mem, byte nes_state1, float *angle, int16_
 // 7:  sweep led row/colum across array, either left/right or up/down
 void lines( byte type, int16_t *display_mem, int16_t ledCount, byte *line_type, short *cur_x, short *cur_y, byte rows, byte cols, byte debug ) {
 
+	/* types
+	0: 8 boxes, single line
+	1: 8 boxes, line w/ fade down
+	2: 8 boxes, line persist
+	3: no boxes, just row/col lines
+	*/
+	
   if ( type < 3 ) {
 
     for ( byte box = 0; box < 8; box++) {
@@ -3721,10 +3845,21 @@ byte in_rfill(int16_t pos, int16_t ledCount, int16_t *rfill_array) {
 void set_led(int16_t location, int16_t color, int16_t *display_mem) {
 
   // check for valid location on panel do nothing otherwise
-  if ( location > 0 && location < 512 ) {
+  if ( location > 0 && location < 512 && color < 512 ) {
     display_mem[location] = color;
   }
 }
+
+// ************************
+// helper to set LED color, include location as x,y coordinate / color checking
+void set_ledXY(byte locationX, byte locationY , int16_t color, int16_t *display_mem) {
+
+  // check for valid location on panel do nothing otherwise
+  if ( locationX < 32 && locationX >= 0 && locationY < 16 && locationY >= 0 && color < 512 ) {
+    display_mem[32*locationY + locationX] = color;
+  }
+}
+
 
 
 // ************************
@@ -3767,6 +3902,23 @@ void draw_col(byte col, int16_t color, int16_t *display_mem, byte rows ) {
   for ( byte i = 0; i < rows; i++ ) {
     display_mem[32 * i + col] = color;
   }
+}
+
+// *************************
+// draw line between 2 given points using Bresenham's line algorithm ( thanks, internet ) 
+void draw_line(byte x0, byte y0, byte x1, byte y1, int16_t color, int16_t *display_mem ) {
+
+	int dx = abs(x1-x0), sx = x0<x1 ? 1 : -1;
+	int dy = abs(y1-y0), sy = y0<y1 ? 1 : -1; 
+	int err = (dx>dy ? dx : -dy)/2, e2;
+			
+	for(;;){
+		set_ledXY(x0, y0, color, display_mem);
+		if (x0==x1 && y0==y1) break;
+		e2 = err;
+		if (e2 >-dx) { err -= dy; x0 += sx; }
+		if (e2 < dy) { err += dx; y0 += sy; }
+	}
 }
 
 // ************************
