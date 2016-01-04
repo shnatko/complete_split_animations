@@ -136,10 +136,10 @@ byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in in
 int cycle_time = 7500;	       // time in ms to wait between switching to next animation in sequence
 const byte debug = 0;          // set to 1 to get serial data out for debug
 const byte bluetooth = 1;	   // set to 1 to enable BT shield
-const byte cal = 0;            // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
+byte cal = 0;            	   // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
 const byte code_array[14] = { 0, 0, 1, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7};
-byte animation_sequence[18] = {0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 15, 16, 17, 99, 99, 0, 99};
+byte animation_sequence[18] = {0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 15, 16, 17, 99, 14, 99, 0, 99};
 byte controller_plugged = 0;   // global for whether or not controller is plugged into port
 
 // static defines
@@ -353,6 +353,7 @@ byte speed_y[ball_max];
 byte interval_counter = 0;
 int16_t ball_color[ball_max];
 byte shape[ball_max];
+byte fade_step = 1;
 
 //variables for static/rfill
 byte fill_dir = 0;
@@ -361,6 +362,11 @@ int16_t current_pos = 0;
 
 // variables for pong
 byte paddle_width = 4;
+byte red_row[20];
+byte orange_row[20];
+byte yellow_row[20];
+byte green_row[20];
+byte blue_row[20];
 int16_t score = 0;
 
 //variables for wave
@@ -391,7 +397,7 @@ float gravity = 0.1;
 byte drop_stack_limit[32] = {5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5};
 
 //variable for text scrolling
-String scrollText = "Happy 4th of July!!";
+String scrollText = "text scrolling";
 String scrollTime = String(millis());
 int16_t text_color = 6;
 int16_t character_origin[140];  // grr. fixed length  140 is alot though.. right, twitter?
@@ -789,12 +795,12 @@ void loop()  {
 			break;
 		case 2:
 			// bounce
-			bounce(random_type, display_mem, &balls, ball_max, location_x, location_y, direction_x, direction_y, speed_x, speed_y, &interval_counter, ball_color, shape, ledCount, nes_state1, &animation_interval );
+			bounce(random_type, display_mem, &balls, ball_max, location_x, location_y, direction_x, direction_y, speed_x, speed_y, &interval_counter, ball_color, shape, ledCount, nes_state1, &animation_interval, &fade_step );
 			break;
 		case 3:
 			// pong
-			//pong( display_mem, ledCount, nes_state1, &nes_location, &paddle_width, &score, direction_x, direction_y, location_x, location_y, speed_x, speed_y, &interval_counter, ball_color, debug );
-			rain(random_type, display_mem, nes_state1, drop_state, drop_pos_y, drop_wait_count, drop_color, drop_wait_time, drop_fall_timer, &gravity, drop_stack_top, drop_stack_limit, debug );
+			pong( random_type, display_mem, ledCount, nes_state1, &nes_location, &paddle_width, &score, direction_x, direction_y, location_x, location_y, speed_x, speed_y, &interval_counter, ball_color, debug, red_row, orange_row, yellow_row, green_row, blue_row, &animation_interval );
+			//rain(random_type, display_mem, nes_state1, drop_state, drop_pos_y, drop_wait_count, drop_color, drop_wait_time, drop_fall_timer, &gravity, drop_stack_top, drop_stack_limit, debug );
 			break;
 		case 4:
 			// clear all ( random static color )
@@ -810,7 +816,7 @@ void loop()  {
 			break;
 		case 6:
 			// wave animation
-			wave(random_type, display_mem, nes_state1, &angle, previous_loc, &dx, &dy, led_mask, &wave_rate, &wave_height, wave_color, &fill_wave, debug);
+			wave(random_type, display_mem, nes_state1, &angle, previous_loc, &dx, &dy, led_mask, &wave_rate, &wave_height, wave_color, &fill_wave, &previousSenseMillis, debug);
 			break;
 		case 7:
 			// random line sweep across array
@@ -824,7 +830,7 @@ void loop()  {
 			// light sense using IR array
 			if ( random_type == 4 ) {
 				light_sense(4, display_mem, ledCount, ball_color, location_x, location_y, ir_sense_data, ir_cal_on, ir_cal_off, ir_node_state, &sense_color_on, &sense_color_off, &previousSenseMillis, led_mask, &ir_detected, ir_fade_count, fade_timer, fade_color_interval, debug );
-				wave(3, display_mem, nes_state1, &angle, previous_loc, &dx, &dy, led_mask, &wave_rate, &wave_height, wave_color, &fill_wave, debug);
+				wave(3, display_mem, nes_state1, &angle, previous_loc, &dx, &dy, led_mask, &wave_rate, &wave_height, wave_color, &fill_wave, &previousSenseMillis, debug);
 			} else {
 				light_sense(random_type, display_mem, ledCount, ball_color, location_x, location_y, ir_sense_data, ir_cal_on, ir_cal_off, ir_node_state, &sense_color_on, &sense_color_off, &previousSenseMillis, led_mask, &ir_detected, ir_fade_count, fade_timer, fade_color_interval, debug );
 			}
@@ -836,7 +842,7 @@ void loop()  {
 			scrollTime = String(millis());
 			if ( random_type > 0 ) {
 			//          type, text,    text_size,               color_type
-			text_scroll(1, scrollText, scrollText.length() + 1, 2, display_mem, ledCount, text_color, character_origin, ir_detected, debug ); //random_type);
+			text_scroll(1, scrollText, scrollText.length() + 1, 0, display_mem, ledCount, text_color, character_origin, ir_detected, debug ); //random_type);
 			} else {
 			//          type, text,    text_size,             color_type
 			text_scroll(2, scrollText, scrollText.length() + 1, 0, display_mem, ledCount, text_color, character_origin, ir_detected, debug ); //random_type);
@@ -880,12 +886,19 @@ void loop()  {
 
     
     if(debug == 3 ){
-      //Serial.print( animation_number );
+      Serial.print( animation_sequence[animation_number] );
 
       Serial.print( "NES controller0 state:  " );
       Serial.print(nes_state0);
       Serial.print( ",   NES controller1 state:  " );
       Serial.println(nes_state1);
+	  
+	  Serial.print( "tetris gameover: ");
+	  Serial.println(gameOver);
+	  
+	  Serial.print( "controller plugged: ");
+	  Serial.println(controller_plugged);
+	  
 	  /*
       Serial.print("ir_group: ");
       Serial.print(ir_group);
@@ -1230,18 +1243,38 @@ void next_animation(byte switchto) {
 		// pong... stil need to fix this
 		nes_on();
 		nes_location = 494;   // starting paddle location
-		direction_x[0] = random(1, 2);
+		random_type = 1;
+		direction_x[0] = random(0, 2);
 		direction_y[0] = random(1, 2);
 		location_x[0] = random(0, 32);
 		location_y[0] = random(0, 3);
 		speed_x[0] = B00000001 << random(0, 3);
 		speed_y[0] = speed_x[0];
+		
+		if ( random_type == 1 ) {
+			for ( byte i = 0; i < 20; i++ ) {
+				red_row[i] = 1; 
+				orange_row[i] = 1;
+				yellow_row[i] = 1;
+				green_row[i] = 1;
+				blue_row[i] = 1;
+			}
+			
+			location_x[0] = random(6, 25);
+			location_y[0] = 8;
+			
+			speed_x[0] = B00000001 << random(2, 3);
+			speed_y[0] = speed_x[0];
+			
+		}
+		
 		//speed_y[i] = B00000001 << random(0,3);
 		//ball_color[i] = (7*random(0,2)) + (56*random(0,2))+(448*random(0,2));
 		ball_color[0] = random(0, 512);
 		interval_counter = 0;
 	
 		// rain
+		/*
 		nes_on();
 		temp_color = random(1, 512);
 		random_type = random(0, 2);
@@ -1259,10 +1292,10 @@ void next_animation(byte switchto) {
 			drop_stack_top[i] = 16;
 			drop_stack_limit[i] = random(3,14);
 			gravity = (random(1, 11) / 10.0);
-		}
+		}*/
 	
-		animation_interval = 45;
-		animation_name = "rain";
+		animation_interval = 30;
+		animation_name = "pong";
 		break;
 	
 	case 4:
@@ -1305,8 +1338,10 @@ void next_animation(byte switchto) {
 		for ( int16_t i = 0; i < ledCount; i++ ) {
 			led_mask[i] = 0x0FFF;
 		}
-		random_type = random(0, 4);
+		random_type = random(0, 7);
+		//random_type = 2;
 		wave_color[0] = random(0, 3);
+		previousSenseMillis = millis();
 		if ( random_type == 2 ) wave_color[1] = random(0,2);
 		nes_location = 0;
 		nes_on();
@@ -1340,6 +1375,7 @@ void next_animation(byte switchto) {
 		// chaser
 		nes_on();
 		random_type = random(0, 9);
+		//random_type = 4;
 		previousSenseMillis = millis();
 		cur_x[0] = 0;
 		cur_y[0] = 0;
@@ -1472,6 +1508,14 @@ void next_animation(byte switchto) {
 		dead1 = 0;
 		dead2 = 0;
 		players = 1;
+		
+		if ( players == 2 ) {
+			snake2[0] = 312;  
+			snake2[1] = 313;
+			snake2[2] = 314;
+			snake2[3] = 315;
+		}
+		
 		foodmode = 0;  // one pellet mode
 		newFood(snake1, snake2, snakeLength, &food1, &food2, foodmode, 0 );
 		animation_interval = 100;
@@ -1619,19 +1663,19 @@ void calibrate(byte caltype) {
     //set on threshold 5% higher than max ambient value found for each node
     for ( byte i = 0; i < 128; i++ ) {
 
-      // manually tune calibrated values, for example, makes edges a bit more sensitive
+      // manually tune calibrated values.. need to make more sensitive w/o false hits
       if ( i > 31 && i < 48 ) {
-        ir_cal_on[i] = ir_cal_on[i] * 1.25;
-        ir_cal_off[i] = ir_cal_on[i] * 0.85;
+        //ir_cal_on[i] = ir_cal_on[i] * 1.20;
+        ir_cal_off[i] = ir_cal_on[i] * 0.90;
       } else if ( i < 16 ) {
-        ir_cal_on[i] = ir_cal_on[i] * 1.10;
-        ir_cal_off[i] = ir_cal_on[i] * 0.85;
+        //ir_cal_on[i] = ir_cal_on[i] * 1.10;
+        ir_cal_off[i] = ir_cal_on[i] * 0.90;
       } else if ( i > 63 && i < 80 ) {
-        ir_cal_on[i] = (ir_cal_on[i]) * 1.35;  // row 4 is sensitive, raise his threshold further
+        //ir_cal_on[i] = (ir_cal_on[i]) * 1.25;  // row 4 is sensitive, raise his threshold further
         ir_cal_off[i] = ir_cal_on[i] * 0.95;
       } else {
-        ir_cal_on[i] = (ir_cal_on[i] + 1) * 1.25; // 20% above max ambient level is threshold
-        ir_cal_off[i] = ir_cal_on[i] * 0.85; // 7% below on threshold for some hysterisis
+        //ir_cal_on[i] = (ir_cal_on[i] + 1) * 1.20; // 20% above max ambient level is threshold
+        ir_cal_off[i] = ir_cal_on[i] * 0.90; // 10% below on threshold for some hysterisis
       }
 
       ir_node_state[i] = 0;
@@ -1690,6 +1734,7 @@ void bluetooth_client(byte debug) {
 	// A* = animation request, set table animation to provided animation number
 	// I* = interval request, set table animation interval
 	// T* = animation cycle time, used to tell table to either cycle animations based on a timer or only cycle on table button push
+	// S* = update animation options (same as T*) and then RESET table
 	// R* = random type for animation, used to vary settings within a particular animation
 	// O1* = option1.  generic changable option.  the actual function of this option will depend on which animation is currently active
 	
@@ -1806,21 +1851,30 @@ void bluetooth_client(byte debug) {
 		// to set animation cycling properties
 		if (currentLine.endsWith("T*")) {
 			
-			// format for string will be ":<TRUE/FALSE>&<cycle time in ms>*T"
+			// format for string will be ":<TRUE/FALSE>&<cycle time in ms>&<TRUE/FALSE>*T"
+			char interval[6];
 			
-			// grab the index of the token in the string
+			
+			// grab the index of the token in the string and the cal boolean
 			byte index_s = currentLine.lastIndexOf("&");
 			byte index_e = currentLine.lastIndexOf("T*");
-			char interval[6];
 			String animationString = currentLine.substring(index_s + 1, index_e);
-			//char *colorstring;
-			int16_t len = animationString.length();
-			animationString.toCharArray(interval, len + 1);
-			cycle_time = atoi(interval);
+			cal = (1 ? animationString == "true" : 0);
 			
-			// also parse out state of check box to determine if animations cycling is enabled or not
-			index_s = currentLine.lastIndexOf(":");
+			// next grab cycle time from string
+			index_s = currentLine.indexOf("&");
 			index_e = currentLine.lastIndexOf("&");
+			if ( index_e > index_s ) {
+				String animationString = currentLine.substring(index_s + 1, index_e);
+				int16_t len = animationString.length();
+				animationString.toCharArray(interval, len + 1);
+				cycle_time = atoi(interval);
+			}
+			
+			
+			//last, parse out state of check box to determine if animations cycling is enabled or not
+			index_s = currentLine.lastIndexOf(":");
+			index_e = currentLine.indexOf("&");
 			animationString = currentLine.substring(index_s + 1, index_e);
 			if ( animationString == "true" ) {
 				cycle = 1;
@@ -1834,13 +1888,76 @@ void bluetooth_client(byte debug) {
 				Serial.println(currentLine.lastIndexOf(":"));
 				Serial.print("option string index of end token is: ");
 				Serial.println(currentLine.lastIndexOf("*T"));
-				Serial.print("option1 animationString: ");
-				Serial.println(animationString);
-				Serial.print("option1 interval: ");
+				Serial.print("option cal: ");
+				Serial.println(cal);
+				Serial.print("option interval: ");
 				Serial.println(interval);
+				Serial.print("option cycle state: ");
+				Serial.println(cycle);
 			}
 			
 		}
+		
+		// to set animation cycling properties AND reset the table
+		if (currentLine.endsWith("S*")) {
+			
+			// format for string will be ":<TRUE/FALSE>&<cycle time in ms>&<TRUE/FALSE>*T"
+			char interval[6];
+			
+			// grab the index of the token in the string and the cal boolean
+			byte index_s = currentLine.lastIndexOf("&");
+			byte index_e = currentLine.lastIndexOf("S*");
+			String animationString = currentLine.substring(index_s + 1, index_e);
+			cal = (1 ? animationString == "true" : 0);
+			
+			if ( debug ) {
+				Serial.print("animationString: ");
+				Serial.println(animationString);
+			}
+			
+			// next grab cycle time from string
+			index_s = currentLine.indexOf("&");
+			index_e = currentLine.lastIndexOf("&");
+			if ( index_e > index_s ) {
+				String animationString = currentLine.substring(index_s + 1, index_e);
+				int16_t len = animationString.length();
+				animationString.toCharArray(interval, len + 1);
+				cycle_time = atoi(interval);
+			}
+					
+			//last, parse out state of check box to determine if animations cycling is enabled or not
+			index_s = currentLine.lastIndexOf(":");
+			index_e = currentLine.indexOf("&");
+			animationString = currentLine.substring(index_s + 1, index_e);
+			if ( animationString == "true" ) {
+				cycle = 1;
+			} else {
+				cycle = 0;
+			}
+
+			// clean some stuff up before issuing reset via setup function
+			buttonState = 1;                      
+			lastbuttonState = 0;                    
+			buttonchanged = 0;               
+			previousMillis = 0;              
+			buttonPreviousMillis = 0;        
+			nesButtonMillis = 0;             
+			animationCycleMillis = 0;        
+			animation_number = 0;            
+			animation_interval = 100;        
+			random_type = 0; 
+			clear_all(0, ledCount, display_mem);
+			
+			// calibrate again if selected
+			calibrate(cal);
+			
+			nes_on();
+			
+			splash(0, display_mem);
+			clear_all(0, ledCount, display_mem);
+			
+		}
+		
 		
 		// to set animation type  format will be ":<type>*R"
 		if (currentLine.endsWith("R*")) {

@@ -875,7 +875,7 @@ bool check_stack(byte type, byte orientation, byte x_loc, byte y_loc, byte *tetr
     return_flag = true;
   }
   
-  if ( debug == 1 ) {
+  if ( debug == 3 ) {
     Serial.print("newloc: ");
     Serial.print(newloc0);
     Serial.print(" ");

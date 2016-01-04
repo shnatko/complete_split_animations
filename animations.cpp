@@ -35,12 +35,16 @@
 	04.02.15  Snake improvements, 2 players, border wrap added
     05.01.15  Added game of life
 	09.15.15  Bunch of tweaks, specifically added line draw mode for bounce animation
+	12.20.15  Fixed bug in 2-player snake
+	01.03.16  HNY added breakout and fixed pong. need some bug fixes still
 	
 	
 	TODOs:
 	
-	 bounce:  for small # of balls, wall strike triggers whole screen on/fade down
-	 rain:    added upside-down mode, also stacking mode
+	 bounce:  	for small # of balls, wall strike triggers whole screen on/fade down
+	 rain:    	added upside-down mode, also stacking mode
+	 pong:     	add 2 player mode
+	 breakout: 	add reflect on falling ball (for rows above red )
 	 
 */
 
@@ -79,13 +83,13 @@ void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_me
     
 	for ( int16_t i = 0; i < ledCount; i++ ) {
 
-		// if (display_mem[i] > 0) {	
-			// paint_string = String("display_mem[");
-			// paint_string = String(paint_string + i + "] = " + display_mem[i] + ";" );
-			// if (debug == 2 && display_mem[i] > 0  ) {
-			// Serial.println(paint_string);
-			// }
-		// }
+		if (display_mem[i] > 0) {	
+			paint_string = String("display_mem[");
+			paint_string = String(paint_string + i + "] = " + display_mem[i] + ";" );
+			if (debug == 2 && display_mem[i] > 0  ) {
+				Serial.println(paint_string);
+			}
+		}
 		
 		if ( debug == 1 ) {
 			Serial.print(display_mem[i]);
@@ -292,7 +296,7 @@ void blink_rand_interval(byte type, byte *blink_count, int16_t ledCount, int16_t
 
 // #################################################################
 // 2: bouncing balls
-void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *location_x, byte *location_y, byte *direction_x, byte *direction_y, byte *speed_x, byte *speed_y, byte *interval_counter, int16_t *ball_color, byte *shape, int16_t ledCount, byte nes_state1, int16_t *animation_interval) {
+void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *location_x, byte *location_y, byte *direction_x, byte *direction_y, byte *speed_x, byte *speed_y, byte *interval_counter, int16_t *ball_color, byte *shape, int16_t ledCount, byte nes_state1, int16_t *animation_interval, byte *fade_step) {
 
   /*  type info:
       type = 0, single pixels bouncing around, if count < 25, fade down, otherwise just clear previous position
@@ -311,7 +315,7 @@ void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *l
   byte right_edge = 31;
   byte top = 0;
   byte bottom = 15;
-  byte a, b, up, down, sel, start = 1;
+  byte a, b, up, down, left, right, sel, start = 1;
 
   //if type is 1, we're using bigger balls, adjust edges accordingly
   if ( type > 1 ) {
@@ -322,9 +326,9 @@ void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *l
   }
 
   // fade down previous led position when ball count <=25
-  if ( (*balls <= 25 && type == 0) || type == 4 ) {
+  if ( (*balls <= 25 && type == 0) || type == 4 || type == 1) {
     for ( int16_t j = 0; j < ledCount; j++) {
-      fade_down(j, 1, display_mem);
+      fade_down(j, *fade_step, display_mem);
     }
   }
 
@@ -370,13 +374,24 @@ void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *l
 
     }
 	
-	if ( type == 1 ) {
+	if ( type == 10 ) {
 		
-		// clear whole line
+		// clear whole line(s)
 		draw_line(location_x[0], location_y[0], location_x[1], location_y[1], 0, display_mem );
+		
+		if ( *balls > 2 ) {
+			draw_line(location_x[1], location_y[1], location_x[2], location_y[2], 0, display_mem );
+			draw_line(location_x[0], location_y[0], location_x[2], location_y[2], 0, display_mem );
+		}
+		
 		// second line
-		if ( *balls > 3 ) {
-			draw_line(location_x[2], location_y[2], location_x[3], location_y[3], 0, display_mem );
+		if ( *balls > 4 ) {
+			draw_line(location_x[3], location_y[3], location_x[4], location_y[4], 0, display_mem );
+		}
+		
+		if ( *balls > 5 ) {
+			draw_line(location_x[4], location_y[4], location_x[5], location_y[5], 0, display_mem );
+			draw_line(location_x[3], location_y[3], location_x[5], location_y[5], 0, display_mem );
 		}
 		
 	}
@@ -490,14 +505,25 @@ void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *l
     // new twist, draw a line between 2 balls ( start with just 2 for now, maybe expand later
 	} else if ( type == 1 ) {
 	
-		draw_line(location_x[0], location_y[0], location_x[1], location_y[1], ball_color[0], display_mem );
-
-				
-		// second line
-		if ( *balls > 3 ) {
-			draw_line(location_x[2], location_y[2], location_x[3], location_y[3], ball_color[2], display_mem );
+		if ( *balls > 1 ) {
+			draw_line(location_x[0], location_y[0], location_x[1], location_y[1], ball_color[0], display_mem );
 		}
 		
+		if ( *balls > 2 ) {
+			draw_line(location_x[1], location_y[1], location_x[2], location_y[2], ball_color[0], display_mem );
+			draw_line(location_x[0], location_y[0], location_x[2], location_y[2], ball_color[0], display_mem );
+		}
+		
+		// second line
+		if ( *balls > 4 ) {
+			draw_line(location_x[3], location_y[3], location_x[4], location_y[4], ball_color[3], display_mem );
+		}
+		
+		if ( *balls > 5 ) {
+			draw_line(location_x[4], location_y[4], location_x[5], location_y[5], ball_color[3], display_mem );
+			draw_line(location_x[3], location_y[3], location_x[5], location_y[5], ball_color[3], display_mem );
+		}
+	
 	}
 
   }
@@ -516,6 +542,8 @@ void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *l
   start = bitRead(nes_state1, 3);
   up = bitRead(nes_state1, 4);
   down = bitRead(nes_state1, 5);
+  left = bitRead(nes_state1, 6);
+  right = bitRead(nes_state1, 7);
 
   if ( a == 0 ) {
     *animation_interval = *animation_interval - 1;
@@ -539,12 +567,22 @@ void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *l
 	
   if ( up == 0 ) {
     *balls = *balls + 1;
-	*balls = constrain(*balls, 3,39);
+	*balls = constrain(*balls, 1,39);
   }
   
   if ( down == 0 ) {
     *balls = *balls - 1;
-	*balls = constrain(*balls, 3,39);
+	*balls = constrain(*balls, 1,39);
+  }
+  
+  if ( left == 0 ) {
+    *fade_step = *fade_step + 1;
+	*fade_step = constrain(*fade_step, 1,7);
+  }
+  
+  if ( right == 0 ) {
+    *fade_step = *fade_step - 1;
+	*fade_step = constrain(*fade_step, 1,7);
   }
 
 
@@ -554,126 +592,455 @@ void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *l
 // #################################################################
 // 3: pong.. still a little buggy
 
-void pong(int16_t *display_mem, int16_t ledCount, byte nes_state1, int16_t *nes_location, byte *paddle_width, int16_t *score, byte *direction_x, byte *direction_y, byte *location_x, byte *location_y, byte *speed_x, byte *speed_y, byte *interval_counter, int16_t *ball_color, byte debug) {
+void pong(byte type, int16_t *display_mem, int16_t ledCount, byte nes_state1, int16_t *nes_location, byte *paddle_width, int16_t *score, byte *direction_x, byte *direction_y, byte *location_x, byte *location_y, byte *speed_x, byte *speed_y, byte *interval_counter, int16_t *ball_color, byte debug, byte *red_row, byte *orange_row, byte *yellow_row, byte *green_row, byte *blue_row, int16_t *animation_interval ) {
 
-  // grab current NES control button state
-  byte left, right, flash, start, select = 1;
+	
+	// grab current NES control button state
+	byte left, right, flash, start, select, a, b = 1;
 
-  left = bitRead(nes_state1, 6);
-  right = bitRead(nes_state1, 7);
-  start = bitRead(nes_state1, 3);
-  select = bitRead(nes_state1, 2);
+	left = bitRead(nes_state1, 6);
+	right = bitRead(nes_state1, 7);
+	start = bitRead(nes_state1, 3);
+	select = bitRead(nes_state1, 2);
+	a = bitRead(nes_state1, 0);
+	b = bitRead(nes_state1, 1);
+	
+	
+	//re-init game when user presses start
+	if ( start == 0 ) {
+		
+		if ( type == 0 ) {
+			direction_x[0] = random(0, 2);
+			direction_y[0] = random(1, 2);
+			location_x[0] = random(0, 32);
+			location_y[0] = random(0, 3);
+			speed_x[0] = B00000001 << random(0, 3);
+			//speed_y[0] = speed_x[0];
+			speed_y[0] = B00000001 << random(0,3);
+			//ball_color[i] = (7*random(0,2)) + (56*random(0,2))+(448*random(0,2));
+			ball_color[0] = random(0, 512);
+			flash = 0;
+		
+		} else if ( type == 1 ) {
+			
+			direction_x[0] = random(0, 2);
+			direction_y[0] = random(1, 2);
+			location_x[0] = random(6, 25);
+			location_y[0] = 8;
+			speed_x[0] = B00000001 << random(2, 3);
+			//speed_y[0] = speed_x[0];
+			speed_y[0] = B00000001 << random(2,3);
+			//ball_color[i] = (7*random(0,2)) + (56*random(0,2))+(448*random(0,2));
+			ball_color[0] = 511;
+			for ( byte i = 0; i < 20; i++ ) {
+				red_row[i] = 1; 
+				orange_row[i] = 1;
+				yellow_row[i] = 1;
+				green_row[i] = 1;
+				blue_row[i] = 1;
+			}
+			
+		}
+		clear_all(0, ledCount, display_mem);
+		*nes_location = 494;   // starting paddle location
+		*interval_counter = 0;
+		*score = 0;
+	}
+	
+	// ********************  pong style  *******************************
+	if ( type == 0  ) {
 
-  //re-init game when user presses start
-  if ( start == 0 ) {
-    clear_all(0, ledCount, display_mem);
-    *nes_location = 494;   // starting paddle location
-    direction_x[0] = random(1, 2);
-    direction_y[0] = random(1, 2);
-    location_x[0] = random(0, 32);
-    location_y[0] = random(0, 3);
-    speed_x[0] = B00000001 << random(0, 3);
-    speed_y[0] = speed_x[0];
-    //speed_y[0] = B00000001 << random(0,3);
-    //ball_color[i] = (7*random(0,2)) + (56*random(0,2))+(448*random(0,2));
-    ball_color[0] = random(0, 512);
-    *interval_counter = 0;
-    flash = 0;
-    *score = 0;
-  }
+		//change paddle width when user presses select  ( make this a level thing later )
+		if ( select == 0 ) {
+		
+			if (*paddle_width < 8 ) {
+			*paddle_width = *paddle_width + 1;
+			} else {
+			*paddle_width = 2;
+			}
+		}
+		
+		
+		// check direction buttons and move paddle to new location
+		if ( left == 0 ) {
+			if (*nes_location > 480 ) {         // move left
+			*nes_location = *nes_location - 1;
+			}
+		} else if ( right == 0 ) {
+			if (*nes_location < (512 - *paddle_width) ) {             // move right
+			*nes_location = *nes_location + 1;
+			}
+		}
+		
+		// draw paddle now
+		draw_paddle(display_mem, *nes_location, *paddle_width, type);
+		
+		// calculate new position for ball
+		
+		//clear last frame
+		display_mem[location_x[0] + (32 * location_y[0])] = 0;
+		
+		// calculate new X position if interval counter is multiple of ball's speed rating ( high speed rating means lower update interval in this case )
+		if ( *interval_counter % speed_x[0] == 0 ) {
+			if (location_x[0] == 31 ) {    // at right edge, change direction left
+			location_x[0]--;
+			direction_x[0] = 0;
+			} else if ( location_x[0] == 0 ) {     // at left edge, change direction right
+			location_x[0]++;
+			direction_x[0] = 1;
+			} else if ( location_x[0] < 31 && direction_x[0] == 1) {
+			location_x[0]++;
+			}  else if ( location_x[0] > 0 && direction_x[0] == 0 ) {
+			location_x[0]--;
+			}
+		}
+		
+		// calculate new Y position, same deal with the speed_y setting, y position only "reflects" from bottom if ball strikes paddle
+		if ( *interval_counter % speed_y[0] == 0 ) {
+			if ( location_y[0] < 14 && direction_y[0] == 1) {
+			location_y[0]++;
+			}  else if ( location_y[0] > 0 && direction_y[0] == 0 ) {
+			location_y[0]--;
+			} else if ( location_y[0] == 14 && direction_y[0] == 1) {    // at bottom and falling, change direction up if x location is within paddle range
+		
+			// check that ball location is on paddle
+			if ( (location_x[0] + 480) >= *nes_location && (location_x[0] + 480) < (*nes_location + *paddle_width) ) {
+				location_y[0]--;
+				direction_y[0] = 0;
+				*score = *score + 1;
+			} else {
+				location_y[0] = 16;
+				flash = 1;
+				if (debug == 1) {
+				Serial.print(location_x[0]);
+				Serial.print("  ");
+				Serial.println(*nes_location);
+				}
+			}
+			} else if ( location_y[0] == 0  ) {    // at top, change direction down
+			location_y[0]++;
+			direction_y[0] = 1;
+			}
+		}
+		
+		// draw ball
+		if (location_y[0] < 16 ) {
+			display_mem[location_x[0] + (32 * location_y[0])] = ball_color[0];
+		}
+		
+		// show score at top if ball escaped
+		if (flash == 1) {
+			for ( byte i = 0; i < *score; i++ ) {
+			display_mem[i] = 56;
+			}
+			display_mem[location_x[0]] = 448;
+		}
+		
+	
+	// ********************  breakout style  *******************************
+	
+	} else if ( type == 1 ) {
+		
+		// check direction buttons and move paddle to new location
+		if ( left == 0 ) {
+			if (*nes_location > 486 ) {         // move left
+				*nes_location = *nes_location - 1;
+			}
+		} else if ( right == 0 ) {
+			if (*nes_location < (506 - *paddle_width) ) {             // move right
+				*nes_location = *nes_location + 1;
+			}
+		}
+		
+		// draw paddle now
+		draw_paddle(display_mem, *nes_location, *paddle_width, type);
+		
+		// calculate new position for ball
+		
+		//clear last frame
+		display_mem[location_x[0] + (32 * location_y[0])] = 0;
+		
+		// store old x location, may need it for brick removal later
+		byte old_x = location_x[0];
+		byte old_y = location_y[0];
+		
+		// calculate new X position if interval counter is multiple of ball's speed rating ( high speed rating means lower update interval in this case )
+		if ( *interval_counter % speed_x[0] == 0 ) {
+			if (location_x[0] == 25 ) {    			// at right edge, change direction left
+			location_x[0]--;
+			direction_x[0] = 0;
+			} else if ( location_x[0] == 6 ) {     	// at left edge, change direction right
+			location_x[0]++;
+			direction_x[0] = 1;
+			} else if ( location_x[0] < 26 && direction_x[0] == 1) {
+			location_x[0]++;
+			}  else if ( location_x[0] > 6 && direction_x[0] == 0 ) {
+			location_x[0]--;
+			}
+		}
+		
+		// calculate new Y position, same deal with the speed_y setting, y position only "reflects" from bottom if ball strikes paddle
+		if ( *interval_counter % speed_y[0] == 0 ) {
+			
+		if ( location_y[0] < 14 && direction_y[0] == 1) {					// not at bottom and falling, keep falling
+				location_y[0]++;
+			}  else if ( location_y[0] > 7 && direction_y[0] == 0 ) {		// not at top and rising, keep rising
+				location_y[0]--;
+			} else if ( location_y[0] == 14 && direction_y[0] == 1) {   	// at bottom and falling, change direction up if x location is within paddle range
+		
+				// check that ball location is on paddle
+				if ( (location_x[0] + 480) >= *nes_location && (location_x[0] + 480) < (*nes_location + *paddle_width) ) {
+					location_y[0]--;
+					direction_y[0] = 0;
+					*score = *score + 1;
+				} else {
+					location_y[0] = 15;
+					flash = 1;
+					if (debug == 1) {
+						Serial.print(location_x[0]);
+						Serial.print("  ");
+						Serial.println(*nes_location);
+					}
+				}
+			} else if ( location_y[0] == 15 ) {								// at bottom, game over
+				flash = 1;
+							
+			// now that temporary new x and y locations are known, check to see if we're hittin' the bricks
+			
+			} else if ( location_y[0] <= 7 && direction_y[0] == 0 ) {    							// in brick zone and rising, need to check here if ball is striking bricks here and if so, break brick
+				
+				//now that we're into potentially brick wall territory, need to check the brick rows to see if there are bricks present
+				//that the ball should hit and eliminate
+					
+				//check each brick row individually, if there is a solid brick above current y location, remove it and reflect, otherwise continue upwards
+				switch (location_y[0]) {
+				
+				// blue row
+				case 7:
+					if ( blue_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
+						blue_row[old_x - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+					} else if ( blue_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
+						blue_row[location_x[0] - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+						
+						if (direction_x[0] == 1 ){
+								
+							if ( old_x == 6 ) {		// just reflected off left wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 0;
+								location_x[0] = old_x - 1;
+							}
+							
+						} else if (direction_x[0] == 0) {
+							
+							if ( old_x == 25 ) {  	// just reflected off right wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 1;
+								location_x[0] = old_x + 1;
+							}
+						}
+						
+					} else {								// pass through up to next row
+						location_y[0]--;
+					}
+					break;
+					
+				//green row	
+				case 6:
+					if ( green_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
+						green_row[old_x - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+					} else if ( green_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
+						green_row[location_x[0] - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+						
+						if (direction_x[0] == 1 ){
+								
+							if ( old_x == 6 ) {		// just reflected off left wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 0;
+								location_x[0] = old_x - 1;
+							}
+							
+						} else if (direction_x[0] == 0) {
+							
+							if ( old_x == 25 ) {  	// just reflected off right wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 1;
+								location_x[0] = old_x + 1;
+							}
+						}
+						
+					} else {								// pass through up to next row
+						location_y[0]--;
+					}
+					break;
+				
+					
+				// yellow row
+				case 5:
+					if ( yellow_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
+						yellow_row[old_x - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+					} else if ( yellow_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
+						yellow_row[location_x[0] - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+						
+						if (direction_x[0] == 1 ){
+								
+							if ( old_x == 6 ) {		// just reflected off left wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 0;
+								location_x[0] = old_x - 1;
+							}
+							
+						} else if (direction_x[0] == 0) {
+							
+							if ( old_x == 25 ) {  	// just reflected off right wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 1;
+								location_x[0] = old_x + 1;
+							}
+						}
+						
+					} else {								// pass through up to next row
+						location_y[0]--;
+					}
+					break;
+					
+				// orange row
+				case 4:
+					if ( orange_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
+						orange_row[old_x - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+					} else if ( orange_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
+						orange_row[location_x[0] - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+						
+						if (direction_x[0] == 1 ){
+								
+							if ( old_x == 6 ) {		// just reflected off left wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 0;
+								location_x[0] = old_x - 1;
+							}
+							
+						} else if (direction_x[0] == 0) {
+							
+							if ( old_x == 25 ) {  	// just reflected off right wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 1;
+								location_x[0] = old_x + 1;
+							}
+						}
+						
+					} else {								// pass through up to next row
+						location_y[0]--;
+					}
+					break;
+						
+				// red row
+				case 3:
+					if ( red_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
+						red_row[old_x - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+					} else if ( red_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
+						red_row[location_x[0] - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+						
+						if (direction_x[0] == 1 ){
+								
+							if ( old_x == 6 ) {		// just reflected off left wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 0;
+								location_x[0] = old_x - 1;
+							}
+							
+						} else if (direction_x[0] == 0) {
+							
+							if ( old_x == 25 ) {  	// just reflected off right wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 1;
+								location_x[0] = old_x + 1;
+							}
+						}
+						
+					} else {								// pass through up to next row
+						location_y[0]--;
+					}
+					break;
+						
+				//above red row now
+				default:									// above top row here, reflect off top of game space if hits
+					if ( location_y[0] > 0 ) {
+						location_y[0]--;
+					} else {
+						location_y[0]++;
+						direction_y[0] = 1;
+					}
+					
+				}
+				
+			}
+		}
+		
+		// draw game space
+		drawBreakoutRows(red_row, orange_row, yellow_row, green_row, blue_row, display_mem );
+		
+			// draw white ball
+		if (location_y[0] < 16 ) {
+			display_mem[location_x[0] + (32 * location_y[0])] = 511;
+		}
+		
+		// show score at top if ball escaped
+		if (flash == 1) {
+			for ( byte i = 0; i < *score; i++ ) {
+			display_mem[i] = 56;
+			}
+			//display_mem[location_x[0]] = 448;
+		}
+		
+	}
+	
+	// lastly increment interval counter, used to determine whether or not to update an led's position based on it's speed setting
+	if ( *interval_counter < 15 ) {
+		*interval_counter = *interval_counter + 1;
+	} else {
+		*interval_counter = 0;
+	}
+	
+	// speed up / slow down fill w/ a/b
+	if ( a == 0 ) {
+		*animation_interval = *animation_interval - 1;
+		*animation_interval = constrain(*animation_interval, 30, 2000);
+	}
 
-  //change paddle width when user presses select  ( make this a level thing later )
-  if ( select == 0 ) {
+	if ( b == 0 ) {
+		*animation_interval = *animation_interval + 1;
+		*animation_interval = constrain(*animation_interval, 30, 2000);
+	}
 
-    if (*paddle_width < 8 ) {
-      *paddle_width = *paddle_width + 1;
-    } else {
-      *paddle_width = 2;
-    }
-  }
-
-
-  // check direction buttons and move paddle to new location
-  if ( left == 0 ) {
-    if (*nes_location > 480 && *nes_location > 479) {         // move left
-      *nes_location = *nes_location - 1;
-    }
-  } else if ( right == 0 ) {
-    if (*nes_location < (512 - *paddle_width) ) {             // move right
-      *nes_location = *nes_location + 1;
-    }
-  }
-
-  // calculate new position for ball
-
-  //clear last frame
-  display_mem[location_x[0] + (32 * location_y[0])] = 0;
-
-  // calculate new X position if interval counter is multiple of ball's speed rating ( high speed rating means lower update interval in this case )
-  if ( *interval_counter % speed_x[0] == 0 ) {
-    if (location_x[0] == 31 ) {    // at right edge, change direction left
-      location_x[0]--;
-      direction_x[0] = 0;
-    } else if ( location_x[0] == 0 ) {     // at left edge, change direction right
-      location_x[0]++;
-      direction_x[0] = 1;
-    } else if ( location_x[0] < 31 && direction_x[0] == 1) {
-      location_x[0]++;
-    }  else if ( location_x[0] > 0 && direction_x[0] == 0 ) {
-      location_x[0]--;
-    }
-  }
-
-  // calculate new Y position, same deal with the speed_y setting, y position only "reflects" from bottom if ball strikes paddle
-  if ( *interval_counter % speed_y[0] == 0 ) {
-    if ( location_y[0] < 15 && direction_y[0] == 1) {
-      location_y[0]++;
-    }  else if ( location_y[0] > 0 && direction_y[0] == 0 ) {
-      location_y[0]--;
-    } else if ( location_y[0] == 15 ) {    // at bottom, change direction up if x location is within paddle range
-
-      // check that ball location is on paddle
-      if ( (location_x[0] + 480) >= *nes_location && (location_x[0] + 480) < (*nes_location + *paddle_width) ) {
-        location_y[0]--;
-        direction_y[0] = 0;
-        *score = *score + 1;
-      } else {
-        location_y[0] = 16;
-        flash = 1;
-        if (debug == 1) {
-          Serial.print(location_x[0]);
-          Serial.print("  ");
-          Serial.println(*nes_location);
-        }
-      }
-    } else if ( location_y[0] == 0  ) {    // at top, change direction down
-      location_y[0]++;
-      direction_y[0] = 1;
-    }
-  }
-
-  // draw ball
-  if (location_y[0] < 16 ) {
-    display_mem[location_x[0] + (32 * location_y[0])] = ball_color[0];
-  }
-
-  // show score at top if ball escaped
-  if (flash == 1) {
-    for ( byte i = 0; i < *score; i++ ) {
-      display_mem[i] = 56;
-    }
-    display_mem[location_x[0]] = 448;
-  }
-
-  // draw paddle now
-  draw_paddle(display_mem, *nes_location, *paddle_width);
-
-  // lastly increment interval counter, used to determine whether or not to update an led's position based on it's speed setting
-  if ( *interval_counter < 16 ) {
-    *interval_counter = *interval_counter + 1;
-  } else {
-    *interval_counter = 0;
-  }
 
 }
 
@@ -1294,12 +1661,14 @@ void random_fade(byte type, int16_t *display_mem, int16_t ledCount, byte fadeLed
 
 // #################################################################
 // 6: wave animation
-void wave(byte type, int16_t *display_mem, byte nes_state1, float *angle, int16_t *previous_loc, float *dx, float *dy, int16_t *led_mask, byte *wave_rate, byte *wave_height, int16_t *wave_color, byte *fill_wave, byte debug ) {
+void wave(byte type, int16_t *display_mem, byte nes_state1, float *angle, int16_t *previous_loc, float *dx, float *dy, int16_t *led_mask, byte *wave_rate, byte *wave_height, int16_t *wave_color, byte *fill_wave, unsigned long *previousSenseMillis, byte debug ) {
 
   //  type 0:   draw sinusoidal waves
   //  type 1:   color cycle
   //  type 2:   2d sinusoidal
   //  type 3:   color cycle but cycle whole panel in unison rather than as a wave
+  //  type 4:   color cycle whole panel but use linear color shifting rather than sinusoidal
+  //  type 5:   color cycle wave but with linear color gradient, not sinusoidal based
 
   float x = *angle;  // this is the current "base" angle to calculate the sin off of
   float y = *angle;
@@ -1424,8 +1793,8 @@ void wave(byte type, int16_t *display_mem, byte nes_state1, float *angle, int16_
     for (byte i=0; i<32; i++){
       
       for ( byte j=0; j<16; j++ ){
-        
-        float z = 3.5*(1+(sin(x)*sin(y) ) );  //z oscillates between 0 and 7
+		  
+		float z = 23.5*(1+(sin(x)*sin(y) ) );  //z oscillates between 0 and 47  
         //float z = 9*(1+(sin(x)*sin(y) ) ); // z oscillates between 0 and 18
         
         int16_t color_r = 0;
@@ -1454,52 +1823,79 @@ void wave(byte type, int16_t *display_mem, byte nes_state1, float *angle, int16_
         }
         if ( z > 10 ) {
           color_r = floor(z-10);
-        }
-        */
+        }*/
+               
         
+        // switch(wave_color[0]) {
         
-        switch(wave_color[0]) {
-        
-          case 0:
-            color_r = z;
-            color_b = 7-z;
-            /*
-            if ( z < 8 ) color_r = 7-z;
-            if ( z > 10 ) color_b = z-11;
-            if ( z > 1 && z < 10 ) color_g = z-2;
-            if ( z > 9 ) color_g = 16-z;
-            */
-            break;
+          // case 0:
+            // color_r = z;
+            // color_b = 7-z;
+            // /*
+            // if ( z < 8 ) color_r = 7-z;
+            // if ( z > 10 ) color_b = z-11;
+            // if ( z > 1 && z < 10 ) color_g = z-2;
+            // if ( z > 9 ) color_g = 16-z;
+            // */
+            // break;
           
           
-          case 1:
-            color_r = z;
-            color_g = 7-z;
-            /*
-            if ( z < 8 ) color_b = 7-z;
-            if ( z > 10 ) color_g = z-11;
-            if ( z > 1 && z < 10 ) color_r = z-2;
-            if ( z > 9 ) color_r = 16-z;
-            */            
-            break;
+          // case 1:
+            // color_r = z;
+            // color_g = 7-z;
+            // /*
+            // if ( z < 8 ) color_b = 7-z;
+            // if ( z > 10 ) color_g = z-11;
+            // if ( z > 1 && z < 10 ) color_r = z-2;
+            // if ( z > 9 ) color_r = 16-z;
+            // */            
+            // break;
             
-          case 2: 
-            color_b = z;
-            color_g = 7-z;
-            /*
-            if ( z < 8 ) color_g = 7-z;
-            if ( z > 10 ) color_r = z-11;
-            if ( z > 1 && z < 10 ) color_b = z-2;
-            if ( z > 9 ) color_b = 16-z;
-            */
-            break; 
+          // case 2: 
+            // color_b = z;
+            // color_g = 7-z;
+            // /*
+            // if ( z < 8 ) color_g = 7-z;
+            // if ( z > 10 ) color_r = z-11;
+            // if ( z > 1 && z < 10 ) color_b = z-2;
+            // if ( z > 9 ) color_b = 16-z;
+            // */
+            // break; 
           
-          
-        }
+        // }
+		
+		// use full rainbow gradient for 2d wave
+		if ( z < 7 ) {
+			color_r = 7;
+			color_g = z;
+			color_b = 0;
+		} else if ( z > 7 && z < 16 ) {
+			color_r = 15-z;
+			color_g = 7;
+			color_b = 0;
+		} else if ( z > 15 && z < 24 ) {
+			color_r = 0;
+			color_g = 7;
+			color_b = z-16;
+		} else if ( z > 23 && z < 32 ) {
+			color_r = 0;
+			color_g = 31-z;
+			color_b = 7;	
+		} else if ( z > 31 && z < 40 ) {
+			color_r = z-32;
+			color_g = 0;
+			color_b = 7;		
+		} else {
+			color_r = 7;
+			color_g = 0;
+			color_b = 47-z;		
+		}
+	
             
         display_mem[32*j + i] = (color_r*64) + (color_g*8) + color_b;    
         
-        y+=*dy*(TWO_PI / 16 );
+        //y-=*dy*(TWO_PI / 16 );
+		//if (wave_color[1] == 0 ) y = 0;
         
       }
       
@@ -1532,6 +1928,152 @@ void wave(byte type, int16_t *display_mem, byte nes_state1, float *angle, int16_
 		}
 	}
 	
+  } else if ( type == 4 ) {    // linear color cycling rather than sinusoidal
+	
+	int16_t color_r, color_g, color_b;
+	
+	if ( x < 7 ) {
+		color_r = 7;
+		color_g = x;
+		color_b = 0;
+	} else if ( x > 7 && x < 16 ) {
+		color_r = 15-x;
+		color_g = 7;
+		color_b = 0;
+	} else if ( x > 15 && x < 24 ) {
+		color_r = 0;
+		color_g = 7;
+		color_b = x-16;
+	} else if ( x > 23 && x < 32 ) {
+		color_r = 0;
+		color_g = 31-x;
+		color_b = 7;	
+	} else if ( x > 31 && x < 40 ) {
+		color_r = x-32;
+		color_g = 0;
+		color_b = 7;		
+	} else {
+		color_r = 7;
+		color_g = 0;
+		color_b = 47-x;		
+	}
+	
+	// scale greyscale intensity w/ selected color
+	color_r = color_r * 64;
+	color_g = color_g * 8;
+	
+	// assign color to every led in panel
+	for ( int16_t i = 0; i<512; i++ ) {
+		display_mem[i] = (color_r + color_g + color_b) & led_mask[i];
+		//display_mem[i] = (color_r) & led_mask[i];
+	}
+	
+	
+  } else if ( type == 5 ) {		// linear color cycling with movement of rainbow
+  
+	// set color greyscale based on sin(x)
+    int16_t color_r; 
+    int16_t color_g; 
+    int16_t color_b;
+	 
+	for (byte i = 0; i < 32; i++) {
+	
+		// set color greyscale based on x "angle"
+		if ( x < 7 ) {
+			color_r = 7;
+			color_g = x;
+			color_b = 0;
+		} else if ( x > 7 && x < 16 ) {
+			color_r = 15-x;
+			color_g = 7;
+			color_b = 0;
+		} else if ( x > 15 && x < 24 ) {
+			color_r = 0;
+			color_g = 7;
+			color_b = x-16;
+		} else if ( x > 23 && x < 32 ) {
+			color_r = 0;
+			color_g = 31-x;
+			color_b = 7;	
+		} else if ( x > 31 && x < 40 ) {
+			color_r = x-32;
+			color_g = 0;
+			color_b = 7;		
+		} else {
+			color_r = 7;
+			color_g = 0;
+			color_b = 47-x;		
+		}
+		
+		// scale greyscale intensity w/ selected color
+		color_r = color_r * 64;
+		color_g = color_g * 8;
+		
+		// increase x value for each column 
+		x += *dx;
+		if ( x > 47 ) x = 0;
+
+		// lastly, assign led array color
+		for ( byte j = 0; j < 16; j++ ) {
+			display_mem[32 * j + i] = (color_r + color_g + color_b) & led_mask[32 * j + i];
+			//display_mem[32*j + i] = color_r + color_g + color_b;
+		}
+  
+	}
+	
+  } else if ( type == 6 ) {		// vertical movement rather than horizontal
+  
+  // set color greyscale based on sin(x)
+    int16_t color_r; 
+    int16_t color_g; 
+    int16_t color_b;
+	 
+	for (byte i = 0; i < 16; i++) {
+	
+		// set color greyscale based on x "angle"
+		if ( x < 7 ) {
+			color_r = 7;
+			color_g = x;
+			color_b = 0;
+		} else if ( x > 7 && x < 16 ) {
+			color_r = 15-x;
+			color_g = 7;
+			color_b = 0;
+		} else if ( x > 15 && x < 24 ) {
+			color_r = 0;
+			color_g = 7;
+			color_b = x-16;
+		} else if ( x > 23 && x < 32 ) {
+			color_r = 0;
+			color_g = 31-x;
+			color_b = 7;	
+		} else if ( x > 31 && x < 40 ) {
+			color_r = x-32;
+			color_g = 0;
+			color_b = 7;		
+		} else {
+			color_r = 7;
+			color_g = 0;
+			color_b = 47-x;		
+		}
+		
+		// scale greyscale intensity w/ selected color
+		color_r = color_r * 64;
+		color_g = color_g * 8;
+		
+		// increase x value for each column 
+		x += *dx;
+		if ( x > 47 ) x = 0;
+
+		// lastly, assign led array color
+		for ( byte j = 0; j < 32; j++ ) {
+			display_mem[32 * i + j] = (color_r + color_g + color_b) & led_mask[32 * i + j];
+			//display_mem[32*j + i] = color_r + color_g + color_b;
+		}
+  
+	}
+  
+  
   }
 
   // amount wave "moves" along led array.. higher = faster
@@ -1539,6 +2081,23 @@ void wave(byte type, int16_t *display_mem, byte nes_state1, float *angle, int16_
 	*angle += (TWO_PI / *wave_rate);
   } else if ( type == 3 ) {
 	*angle = *angle + (*dx * (TWO_PI / 32));
+  } else if ( type == 4 ) {
+	
+	if ( *angle < 47 ) {
+		*angle = *angle + 1;
+	} else {
+		*angle = 0;
+	}
+		  
+	if ( debug == 1 ) {
+		Serial.println(*angle);
+	}
+  } else if ( type == 5 || type == 6) {
+		
+	*angle += ( 47 / *wave_rate );
+	
+	if (*angle > 47 ) *angle = 0;
+
   }
  
 
@@ -1584,12 +2143,12 @@ void wave(byte type, int16_t *display_mem, byte nes_state1, float *angle, int16_
 
   if ( b == 0 ) {
     *wave_rate = *wave_rate + 1;
-    *wave_rate = constrain(*wave_rate, 1, 40);
+	*wave_rate = constrain(*wave_rate, 1, 40);
   }
 
   if ( a == 0 ) {
     *wave_rate = *wave_rate - 1;
-    *wave_rate = constrain(*wave_rate, 1, 40);
+	*wave_rate = constrain(*wave_rate, 1, 40);
   }
 
   if ( select == 0 ) {
@@ -2222,6 +2781,9 @@ void chaser(byte type, int16_t ledCount, int16_t *display_mem, byte nes_state1, 
     }
     *previousSenseMillis = millis();
   }
+  
+  // *** SJH remove me later
+  //*random_type = 4;
 }
 
 
@@ -3782,20 +4344,26 @@ byte fade_up(int16_t location, int16_t target, int16_t *display_mem) {
 
 // ************************
 // draw paddle for pong
-void draw_paddle(int16_t *display_mem, int16_t nes_location, byte paddle_width) {
+void draw_paddle(int16_t *display_mem, int16_t nes_location, byte paddle_width, byte type) {
 
-  int16_t paddle_color = 448;
+	int16_t paddle_color = 448;
 
-  //clear bottom row and draw current paddle location
-  for ( int16_t i = 480; i < 512; i++) {
+	//clear bottom row and draw current paddle location
+	for ( int16_t i = 480; i < 512; i++) {
 
-    if ( i >= nes_location && i < ( nes_location + paddle_width ) ) {
-      display_mem[i] = paddle_color;
-    } else {
-      display_mem[i] = 0;
-    }
+		if ( i >= nes_location && i < ( nes_location + paddle_width ) ) {
+			display_mem[i] = paddle_color;
+		} else {
+		display_mem[i] = 0;
+		}
 
-  }
+	}	
+  
+	// for breakout mode, need to put back in the 2 bottom edges of the side walls
+	if ( type == 1 ) {
+		display_mem[485] = 511;
+		display_mem[506] = 511;
+	}
 }
 
 // ************************
@@ -4071,13 +4639,18 @@ void updateSnakes(int16_t *snake1, byte dir1, int16_t *snake2, byte dir2, byte s
   
   if ( debug == 1 ) {
 	Serial.print("dir: ");
-	Serial.print(dir1);
+	Serial.print(dir2);
     Serial.print (" row: ");
-    Serial.print (row1);
+    Serial.print (row2);
     Serial.print (" col: ");
-    Serial.print(col1);
+    Serial.print(col2);
     Serial.print(" adder: ");
-    Serial.println(adder1);
+    Serial.println(adder2);
+	
+	Serial.print(0);
+    Serial.print(": ");
+    Serial.println(snake2[0]);
+	
   }
   
   // to update the snake positions, shift the segment locations to the right by 1 in the array and add the adder value to the head
@@ -4089,9 +4662,21 @@ void updateSnakes(int16_t *snake1, byte dir1, int16_t *snake2, byte dir2, byte s
   // update head locations
   if ( snake1[0] < 999 ) snake1[0] = snake1[0] + adder1;
   if ( snake2[0] < 999 ) snake2[0] = snake2[0] + adder2;
-    
+  
+
+  if ( debug == 1 ) {
+	Serial.print("oldhead2: ");
+	Serial.print(oldHead2);
+    Serial.print (" head2 after add: ");
+    Serial.println(snake2[0]);
+  }
+  
   // loop through the rest of the snake length and shift the previous segment to the new one
-  for ( byte i = snakeLength;  i > 0; i-- ) {
+  for ( byte i = snakeLength-1;  i > 0; i-- ) {
+	  
+	if (debug == 1 && snake2[0] == 999 ) {
+		Serial.println("fucked up head A!");
+	}  
     
     if ( snake1[i] < 999 ) {
       if ( i == 1 ) {
@@ -4101,6 +4686,10 @@ void updateSnakes(int16_t *snake1, byte dir1, int16_t *snake2, byte dir2, byte s
         snake1[i] = snake1[i-1];  
       }
     }
+	
+	if (debug == 1 && snake2[0] == 999 ) {
+		Serial.println("fucked up head B!");
+	}
     
     if ( snake2[i] < 999 ) {
       if ( i == 1 ) {
@@ -4114,14 +4703,18 @@ void updateSnakes(int16_t *snake1, byte dir1, int16_t *snake2, byte dir2, byte s
     if ( debug == 1 ) {
       Serial.print(i);
       Serial.print(": ");
-      Serial.println(snake1[i]);
+      Serial.println(snake2[i]);
+	  
+	  if (snake2[0] == 999 ) {
+		Serial.println("fucked up head C!");
+	  }
     }
   }
   
-  if ( debug == 1 ) {
+  if ( debug == 2 ) {
 	Serial.print(0);
     Serial.print(": ");
-    Serial.println(snake1[0]);
+    Serial.println(snake2[0]);
   }
   
 }
@@ -4655,4 +5248,23 @@ void colorchange(int16_t current_color, int16_t new_color, int16_t *display_mem,
 
 }
 
+// ************************
+// draw rows for missing/present bricks for breakout pong mode
+void drawBreakoutRows(byte *red_row, byte *orange_row, byte *yellow_row, byte *green_row, byte *blue_row, int16_t *display_mem) {
 
+	for ( byte i = 0; i < 20; i++ ) {
+		display_mem[ 70 + i] = ( red_row[i]    == 1 ? 384 : 0 );
+		display_mem[102 + i] = ( orange_row[i] == 1 ? 328 : 0 );
+		display_mem[134 + i] = ( yellow_row[i] == 1 ? 304 : 0 );
+		display_mem[166 + i] = ( green_row[i]  == 1 ?  56 : 0 );
+		display_mem[198 + i] = ( blue_row[i]   == 1 ?   5 : 0 );
+		
+		
+		// draw side walls of game space
+		if (i < 16 ) {
+			display_mem[32*i + 5] = 511;
+			display_mem[32*i + 26] = 511;
+		}
+	}
+
+}

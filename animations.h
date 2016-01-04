@@ -37,12 +37,12 @@ typedef unsigned char byte;
 
 void nes_paint(volatile byte*, byte*, int16_t*, int16_t*, int16_t, int16_t*, int16_t*, byte*, byte, const byte*, byte*, int16_t*, byte*, byte*, byte*, byte, byte*, byte*, int16_t*, int16_t*, byte* );
 void blink_rand_interval(byte, byte*, int16_t, int16_t*, int16_t*, int16_t*, byte, int16_t* );
-void bounce(byte, int16_t*, byte*, byte, byte*, byte*, byte*, byte*, byte*, byte*, byte*, int16_t*, byte*, int16_t, byte, int16_t*);
-void pong(int16_t*, int16_t, byte, int16_t*, byte*, int16_t*, byte*, byte*, byte*, byte*, byte*, byte*, byte*, int16_t*, byte);
+void bounce(byte, int16_t*, byte*, byte, byte*, byte*, byte*, byte*, byte*, byte*, byte*, int16_t*, byte*, int16_t, byte, int16_t*, byte*);
+void pong(byte, int16_t*, int16_t, byte, int16_t*, byte*, int16_t*, byte*, byte*, byte*, byte*, byte*, byte*, byte*, int16_t*, byte, byte*, byte*, byte*, byte*, byte*, int16_t* );
 void rain(byte, int16_t*, byte, byte*, byte*, byte*, int16_t*, byte, byte*, float*, byte*, byte*, byte);
 void rfill ( byte, int16_t*, int16_t, byte, byte*, int16_t*, int16_t*, int16_t*, int16_t*, int16_t*);
 void random_fade(byte, int16_t*, int16_t, byte, byte*, int16_t*, int16_t, int16_t, byte*, int16_t*, byte, int16_t, int16_t* );
-void wave(byte, int16_t*, byte, float*, int16_t*, float*, float*, int16_t*, byte*, byte*, int16_t*, byte*, byte);
+void wave(byte, int16_t*, byte, float*, int16_t*, float*, float*, int16_t*, byte*, byte*, int16_t*, byte*, unsigned long*, byte);
 void lines( byte, int16_t*, int16_t, byte*, short*, short*, byte, byte, byte );
 void chaser(byte, int16_t, int16_t*, byte, byte*, byte*, byte, byte*, byte*, byte*, byte*, short*, short*, int16_t*, byte*, int16_t*, unsigned long*, int16_t );
 void light_sense( byte, int16_t*, int16_t, int16_t*, byte*, byte*, volatile byte*, byte*, byte*, byte*, int16_t*, int16_t*, unsigned long*, int16_t*, byte*, byte*, byte, int16_t, byte);
@@ -66,7 +66,7 @@ byte check_code( byte*, byte, byte, const byte* );
 void cursor_blink(int16_t, int16_t*);
 byte fade_down(int16_t, byte, int16_t*);
 byte fade_up(int16_t, int16_t, int16_t*);
-void draw_paddle(int16_t*, int16_t, byte);
+void draw_paddle(int16_t*, int16_t, byte, byte);
 void rfill_init(byte, int16_t, int16_t*);
 byte in_rfill(int16_t, int16_t, int16_t*);
 void set_led(int16_t, int16_t, int16_t*);
@@ -87,6 +87,7 @@ void maze_gen(int16_t*, byte*, byte*, byte*, char*, byte);
 byte checkMazeNodes(byte*);
 void set_wall(byte, byte, int16_t, int16_t*);
 void colorchange(int16_t, int16_t, int16_t*, int16_t);
+void drawBreakoutRows(byte*, byte*, byte*, byte*, byte*, int16_t*);
 
 
 
