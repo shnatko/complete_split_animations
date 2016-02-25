@@ -37,6 +37,8 @@
 	09.15.15  Bunch of tweaks, specifically added line draw mode for bounce animation
 	12.20.15  Fixed bug in 2-player snake
 	01.03.16  HNY added breakout and fixed pong. need some bug fixes still
+	01.08.16  Added voter function for baby shower, work in progress
+	01.09.16  voter improved, show's counts and fireworks for winner now, mostly done until hw gets here.
 	
 	
 	TODOs:
@@ -45,6 +47,7 @@
 	 rain:    	added upside-down mode, also stacking mode
 	 pong:     	add 2 player mode
 	 breakout: 	add reflect on falling ball (for rows above red )
+	 voter: 	need display tally animation for current vote check
 	 
 */
 
@@ -157,7 +160,7 @@ void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_me
     // move led up if not in top row already, no wrap
     if (*nes_location > 31) {
       *nes_location = *nes_location - 32;
-      cursor_blink(*nes_location, display_mem);
+      cursor_blink(*nes_location, display_mem, 511);
     }
 
     // check current button combo
@@ -169,7 +172,7 @@ void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_me
     // move led down if not in bottom row already, no wrap
     if (*nes_location < 480) {
       *nes_location = *nes_location + 32;
-      cursor_blink(*nes_location, display_mem);
+      cursor_blink(*nes_location, display_mem, 511);
     }
 
     // check current button combo
@@ -179,7 +182,7 @@ void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_me
   } else if ( left == 0 ) {
     if (*nes_location % 32 > 0) {       // move left, no wrap
       *nes_location = *nes_location - 1;
-      cursor_blink(*nes_location, display_mem);
+      cursor_blink(*nes_location, display_mem, 511);
     }
 
     // check current button combo
@@ -189,7 +192,7 @@ void nes_paint(volatile byte *nes_state1, byte *last_button, int16_t *display_me
   } else if ( right == 0 ) {
     if (*nes_location % 32 < 31) {        // move right, no wrap
       *nes_location = *nes_location + 1;
-      cursor_blink(*nes_location, display_mem);
+      cursor_blink(*nes_location, display_mem, 511);
     }
 
     // check current button combo
@@ -588,462 +591,6 @@ void bounce(byte type, int16_t *display_mem, byte *balls, byte ball_max, byte *l
 
 }
 
-
-// #################################################################
-// 3: pong.. still a little buggy
-
-void pong(byte type, int16_t *display_mem, int16_t ledCount, byte nes_state1, int16_t *nes_location, byte *paddle_width, int16_t *score, byte *direction_x, byte *direction_y, byte *location_x, byte *location_y, byte *speed_x, byte *speed_y, byte *interval_counter, int16_t *ball_color, byte debug, byte *red_row, byte *orange_row, byte *yellow_row, byte *green_row, byte *blue_row, int16_t *animation_interval ) {
-
-	
-	// grab current NES control button state
-	byte left, right, flash, start, select, a, b = 1;
-
-	left = bitRead(nes_state1, 6);
-	right = bitRead(nes_state1, 7);
-	start = bitRead(nes_state1, 3);
-	select = bitRead(nes_state1, 2);
-	a = bitRead(nes_state1, 0);
-	b = bitRead(nes_state1, 1);
-	
-	
-	//re-init game when user presses start
-	if ( start == 0 ) {
-		
-		if ( type == 0 ) {
-			direction_x[0] = random(0, 2);
-			direction_y[0] = random(1, 2);
-			location_x[0] = random(0, 32);
-			location_y[0] = random(0, 3);
-			speed_x[0] = B00000001 << random(0, 3);
-			//speed_y[0] = speed_x[0];
-			speed_y[0] = B00000001 << random(0,3);
-			//ball_color[i] = (7*random(0,2)) + (56*random(0,2))+(448*random(0,2));
-			ball_color[0] = random(0, 512);
-			flash = 0;
-		
-		} else if ( type == 1 ) {
-			
-			direction_x[0] = random(0, 2);
-			direction_y[0] = random(1, 2);
-			location_x[0] = random(6, 25);
-			location_y[0] = 8;
-			speed_x[0] = B00000001 << random(2, 3);
-			//speed_y[0] = speed_x[0];
-			speed_y[0] = B00000001 << random(2,3);
-			//ball_color[i] = (7*random(0,2)) + (56*random(0,2))+(448*random(0,2));
-			ball_color[0] = 511;
-			for ( byte i = 0; i < 20; i++ ) {
-				red_row[i] = 1; 
-				orange_row[i] = 1;
-				yellow_row[i] = 1;
-				green_row[i] = 1;
-				blue_row[i] = 1;
-			}
-			
-		}
-		clear_all(0, ledCount, display_mem);
-		*nes_location = 494;   // starting paddle location
-		*interval_counter = 0;
-		*score = 0;
-	}
-	
-	// ********************  pong style  *******************************
-	if ( type == 0  ) {
-
-		//change paddle width when user presses select  ( make this a level thing later )
-		if ( select == 0 ) {
-		
-			if (*paddle_width < 8 ) {
-			*paddle_width = *paddle_width + 1;
-			} else {
-			*paddle_width = 2;
-			}
-		}
-		
-		
-		// check direction buttons and move paddle to new location
-		if ( left == 0 ) {
-			if (*nes_location > 480 ) {         // move left
-			*nes_location = *nes_location - 1;
-			}
-		} else if ( right == 0 ) {
-			if (*nes_location < (512 - *paddle_width) ) {             // move right
-			*nes_location = *nes_location + 1;
-			}
-		}
-		
-		// draw paddle now
-		draw_paddle(display_mem, *nes_location, *paddle_width, type);
-		
-		// calculate new position for ball
-		
-		//clear last frame
-		display_mem[location_x[0] + (32 * location_y[0])] = 0;
-		
-		// calculate new X position if interval counter is multiple of ball's speed rating ( high speed rating means lower update interval in this case )
-		if ( *interval_counter % speed_x[0] == 0 ) {
-			if (location_x[0] == 31 ) {    // at right edge, change direction left
-			location_x[0]--;
-			direction_x[0] = 0;
-			} else if ( location_x[0] == 0 ) {     // at left edge, change direction right
-			location_x[0]++;
-			direction_x[0] = 1;
-			} else if ( location_x[0] < 31 && direction_x[0] == 1) {
-			location_x[0]++;
-			}  else if ( location_x[0] > 0 && direction_x[0] == 0 ) {
-			location_x[0]--;
-			}
-		}
-		
-		// calculate new Y position, same deal with the speed_y setting, y position only "reflects" from bottom if ball strikes paddle
-		if ( *interval_counter % speed_y[0] == 0 ) {
-			if ( location_y[0] < 14 && direction_y[0] == 1) {
-			location_y[0]++;
-			}  else if ( location_y[0] > 0 && direction_y[0] == 0 ) {
-			location_y[0]--;
-			} else if ( location_y[0] == 14 && direction_y[0] == 1) {    // at bottom and falling, change direction up if x location is within paddle range
-		
-			// check that ball location is on paddle
-			if ( (location_x[0] + 480) >= *nes_location && (location_x[0] + 480) < (*nes_location + *paddle_width) ) {
-				location_y[0]--;
-				direction_y[0] = 0;
-				*score = *score + 1;
-			} else {
-				location_y[0] = 16;
-				flash = 1;
-				if (debug == 1) {
-				Serial.print(location_x[0]);
-				Serial.print("  ");
-				Serial.println(*nes_location);
-				}
-			}
-			} else if ( location_y[0] == 0  ) {    // at top, change direction down
-			location_y[0]++;
-			direction_y[0] = 1;
-			}
-		}
-		
-		// draw ball
-		if (location_y[0] < 16 ) {
-			display_mem[location_x[0] + (32 * location_y[0])] = ball_color[0];
-		}
-		
-		// show score at top if ball escaped
-		if (flash == 1) {
-			for ( byte i = 0; i < *score; i++ ) {
-			display_mem[i] = 56;
-			}
-			display_mem[location_x[0]] = 448;
-		}
-		
-	
-	// ********************  breakout style  *******************************
-	
-	} else if ( type == 1 ) {
-		
-		// check direction buttons and move paddle to new location
-		if ( left == 0 ) {
-			if (*nes_location > 486 ) {         // move left
-				*nes_location = *nes_location - 1;
-			}
-		} else if ( right == 0 ) {
-			if (*nes_location < (506 - *paddle_width) ) {             // move right
-				*nes_location = *nes_location + 1;
-			}
-		}
-		
-		// draw paddle now
-		draw_paddle(display_mem, *nes_location, *paddle_width, type);
-		
-		// calculate new position for ball
-		
-		//clear last frame
-		display_mem[location_x[0] + (32 * location_y[0])] = 0;
-		
-		// store old x location, may need it for brick removal later
-		byte old_x = location_x[0];
-		byte old_y = location_y[0];
-		
-		// calculate new X position if interval counter is multiple of ball's speed rating ( high speed rating means lower update interval in this case )
-		if ( *interval_counter % speed_x[0] == 0 ) {
-			if (location_x[0] == 25 ) {    			// at right edge, change direction left
-			location_x[0]--;
-			direction_x[0] = 0;
-			} else if ( location_x[0] == 6 ) {     	// at left edge, change direction right
-			location_x[0]++;
-			direction_x[0] = 1;
-			} else if ( location_x[0] < 26 && direction_x[0] == 1) {
-			location_x[0]++;
-			}  else if ( location_x[0] > 6 && direction_x[0] == 0 ) {
-			location_x[0]--;
-			}
-		}
-		
-		// calculate new Y position, same deal with the speed_y setting, y position only "reflects" from bottom if ball strikes paddle
-		if ( *interval_counter % speed_y[0] == 0 ) {
-			
-		if ( location_y[0] < 14 && direction_y[0] == 1) {					// not at bottom and falling, keep falling
-				location_y[0]++;
-			}  else if ( location_y[0] > 7 && direction_y[0] == 0 ) {		// not at top and rising, keep rising
-				location_y[0]--;
-			} else if ( location_y[0] == 14 && direction_y[0] == 1) {   	// at bottom and falling, change direction up if x location is within paddle range
-		
-				// check that ball location is on paddle
-				if ( (location_x[0] + 480) >= *nes_location && (location_x[0] + 480) < (*nes_location + *paddle_width) ) {
-					location_y[0]--;
-					direction_y[0] = 0;
-					*score = *score + 1;
-				} else {
-					location_y[0] = 15;
-					flash = 1;
-					if (debug == 1) {
-						Serial.print(location_x[0]);
-						Serial.print("  ");
-						Serial.println(*nes_location);
-					}
-				}
-			} else if ( location_y[0] == 15 ) {								// at bottom, game over
-				flash = 1;
-							
-			// now that temporary new x and y locations are known, check to see if we're hittin' the bricks
-			
-			} else if ( location_y[0] <= 7 && direction_y[0] == 0 ) {    							// in brick zone and rising, need to check here if ball is striking bricks here and if so, break brick
-				
-				//now that we're into potentially brick wall territory, need to check the brick rows to see if there are bricks present
-				//that the ball should hit and eliminate
-					
-				//check each brick row individually, if there is a solid brick above current y location, remove it and reflect, otherwise continue upwards
-				switch (location_y[0]) {
-				
-				// blue row
-				case 7:
-					if ( blue_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
-						blue_row[old_x - 6] = 0;
-						location_y[0]++;
-						direction_y[0] = 1;
-					} else if ( blue_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
-						blue_row[location_x[0] - 6] = 0;
-						location_y[0]++;
-						direction_y[0] = 1;
-						
-						if (direction_x[0] == 1 ){
-								
-							if ( old_x == 6 ) {		// just reflected off left wall
-								// do nothing, already ok
-							} else {
-								direction_x[0] = 0;
-								location_x[0] = old_x - 1;
-							}
-							
-						} else if (direction_x[0] == 0) {
-							
-							if ( old_x == 25 ) {  	// just reflected off right wall
-								// do nothing, already ok
-							} else {
-								direction_x[0] = 1;
-								location_x[0] = old_x + 1;
-							}
-						}
-						
-					} else {								// pass through up to next row
-						location_y[0]--;
-					}
-					break;
-					
-				//green row	
-				case 6:
-					if ( green_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
-						green_row[old_x - 6] = 0;
-						location_y[0]++;
-						direction_y[0] = 1;
-					} else if ( green_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
-						green_row[location_x[0] - 6] = 0;
-						location_y[0]++;
-						direction_y[0] = 1;
-						
-						if (direction_x[0] == 1 ){
-								
-							if ( old_x == 6 ) {		// just reflected off left wall
-								// do nothing, already ok
-							} else {
-								direction_x[0] = 0;
-								location_x[0] = old_x - 1;
-							}
-							
-						} else if (direction_x[0] == 0) {
-							
-							if ( old_x == 25 ) {  	// just reflected off right wall
-								// do nothing, already ok
-							} else {
-								direction_x[0] = 1;
-								location_x[0] = old_x + 1;
-							}
-						}
-						
-					} else {								// pass through up to next row
-						location_y[0]--;
-					}
-					break;
-				
-					
-				// yellow row
-				case 5:
-					if ( yellow_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
-						yellow_row[old_x - 6] = 0;
-						location_y[0]++;
-						direction_y[0] = 1;
-					} else if ( yellow_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
-						yellow_row[location_x[0] - 6] = 0;
-						location_y[0]++;
-						direction_y[0] = 1;
-						
-						if (direction_x[0] == 1 ){
-								
-							if ( old_x == 6 ) {		// just reflected off left wall
-								// do nothing, already ok
-							} else {
-								direction_x[0] = 0;
-								location_x[0] = old_x - 1;
-							}
-							
-						} else if (direction_x[0] == 0) {
-							
-							if ( old_x == 25 ) {  	// just reflected off right wall
-								// do nothing, already ok
-							} else {
-								direction_x[0] = 1;
-								location_x[0] = old_x + 1;
-							}
-						}
-						
-					} else {								// pass through up to next row
-						location_y[0]--;
-					}
-					break;
-					
-				// orange row
-				case 4:
-					if ( orange_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
-						orange_row[old_x - 6] = 0;
-						location_y[0]++;
-						direction_y[0] = 1;
-					} else if ( orange_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
-						orange_row[location_x[0] - 6] = 0;
-						location_y[0]++;
-						direction_y[0] = 1;
-						
-						if (direction_x[0] == 1 ){
-								
-							if ( old_x == 6 ) {		// just reflected off left wall
-								// do nothing, already ok
-							} else {
-								direction_x[0] = 0;
-								location_x[0] = old_x - 1;
-							}
-							
-						} else if (direction_x[0] == 0) {
-							
-							if ( old_x == 25 ) {  	// just reflected off right wall
-								// do nothing, already ok
-							} else {
-								direction_x[0] = 1;
-								location_x[0] = old_x + 1;
-							}
-						}
-						
-					} else {								// pass through up to next row
-						location_y[0]--;
-					}
-					break;
-						
-				// red row
-				case 3:
-					if ( red_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
-						red_row[old_x - 6] = 0;
-						location_y[0]++;
-						direction_y[0] = 1;
-					} else if ( red_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
-						red_row[location_x[0] - 6] = 0;
-						location_y[0]++;
-						direction_y[0] = 1;
-						
-						if (direction_x[0] == 1 ){
-								
-							if ( old_x == 6 ) {		// just reflected off left wall
-								// do nothing, already ok
-							} else {
-								direction_x[0] = 0;
-								location_x[0] = old_x - 1;
-							}
-							
-						} else if (direction_x[0] == 0) {
-							
-							if ( old_x == 25 ) {  	// just reflected off right wall
-								// do nothing, already ok
-							} else {
-								direction_x[0] = 1;
-								location_x[0] = old_x + 1;
-							}
-						}
-						
-					} else {								// pass through up to next row
-						location_y[0]--;
-					}
-					break;
-						
-				//above red row now
-				default:									// above top row here, reflect off top of game space if hits
-					if ( location_y[0] > 0 ) {
-						location_y[0]--;
-					} else {
-						location_y[0]++;
-						direction_y[0] = 1;
-					}
-					
-				}
-				
-			}
-		}
-		
-		// draw game space
-		drawBreakoutRows(red_row, orange_row, yellow_row, green_row, blue_row, display_mem );
-		
-			// draw white ball
-		if (location_y[0] < 16 ) {
-			display_mem[location_x[0] + (32 * location_y[0])] = 511;
-		}
-		
-		// show score at top if ball escaped
-		if (flash == 1) {
-			for ( byte i = 0; i < *score; i++ ) {
-			display_mem[i] = 56;
-			}
-			//display_mem[location_x[0]] = 448;
-		}
-		
-	}
-	
-	// lastly increment interval counter, used to determine whether or not to update an led's position based on it's speed setting
-	if ( *interval_counter < 15 ) {
-		*interval_counter = *interval_counter + 1;
-	} else {
-		*interval_counter = 0;
-	}
-	
-	// speed up / slow down fill w/ a/b
-	if ( a == 0 ) {
-		*animation_interval = *animation_interval - 1;
-		*animation_interval = constrain(*animation_interval, 30, 2000);
-	}
-
-	if ( b == 0 ) {
-		*animation_interval = *animation_interval + 1;
-		*animation_interval = constrain(*animation_interval, 30, 2000);
-	}
-
-
-}
-
 // #################################################################
 // 3: rain animation, led will fade in at top then "drip" down
 
@@ -1361,6 +908,9 @@ void rfill ( byte type, int16_t *display_mem, int16_t ledCount, byte nes_state1,
 // modified fade animation to have random fwait interval before turning led on.  also, led turn on to full color level and only fades to off.  nicer effect
 void random_fade(byte type, int16_t *display_mem, int16_t ledCount, byte fadeLeds, byte *wait_interval, int16_t *led_to_fade, int16_t fwait_min, int16_t fwait_max, byte *fw_state, int16_t *fade_color, byte firework_count, int16_t debug, int16_t *animation_interval ) {
 
+	// type 0:  	random single led blink and fade out
+	// type 1:  	fireworks, random colors
+	// type 2-3: 	fireworks, set color pallets ( for voter )
 
   // basic blink-on fade down individual LEDs
   if ( type == 0 ) {
@@ -1402,7 +952,7 @@ void random_fade(byte type, int16_t *display_mem, int16_t ledCount, byte fadeLed
   }
 
   // "fireworks" mode. play firework animation w/ fade down from center
-  if ( type == 1 ) {
+  if ( type == 1 || type == 2 || type == 3) {
 
     for ( byte i = 0; i < firework_count; i++ ) {
 
@@ -1418,25 +968,57 @@ void random_fade(byte type, int16_t *display_mem, int16_t ledCount, byte fadeLed
 
         //start firework animation
         fw_state[i] = 1;
-        int16_t color = random(0, 7);
-        if (color == 0) {
-          color = 448;  // red
-        } else if (color == 1) {
-          color = 7;    // blue
-        } else if (color == 2)  {
-          color = 36;   // blue green
-        } else if (color == 3) {
-          color = 70;  // red blue
-        } else if (color == 4 ) {
-          color = 56;   // green
-        } else if (color == 5 ) {
-          color = 376;  // red green ( yellow )
-        } else if (color == 6 ) {
-          color = 456;  // red green ( orange )
-        }  else {
-          color = 511;
-        }
-        fade_color[i] = color;
+		
+		if ( type == 1 ) {
+			int16_t color = random(0, 7);
+			if (color == 0) {
+				color = 448;  // red
+			} else if (color == 1) {
+				color = 7;    // blue
+			} else if (color == 2)  {
+				color = 36;   // blue green
+			} else if (color == 3) {
+				color = 70;  // red blue
+			} else if (color == 4 ) {
+				color = 56;   // green
+			} else if (color == 5 ) {
+				color = 376;  // red green ( yellow )
+			} else if (color == 6 ) {
+				color = 456;  // red green ( orange )
+			}  else {
+				color = 511;
+			}
+			fade_color[i] = color;
+			
+		} else if ( type == 2 ) {
+			int16_t color = random(0, 4);  // "boy" colors, blue variants
+			if (color == 0) {
+				color = 3;  
+			} else if (color == 1) {
+				color = 15;    
+			} else if (color == 2)  {
+				color = 39;   
+			} else if (color == 3) {
+				color = 51;  
+			}  else {
+				color = 511;
+			}
+			fade_color[i] = color;
+		} else if ( type == 3 ) {
+			int16_t color = random(0, 4);  // "girl" colors, pink/purple variants
+			if (color == 0) {
+				color = 65;  
+			} else if (color == 1) {
+				color = 195;    
+			} else if (color == 2)  {
+				color = 387;   
+			} else if (color == 3) {
+				color = 460;  
+			}  else {
+				color = 511;
+			}
+			fade_color[i] = color;
+		}
       }
 
       // set LEDs on based on where in animation frame the current LED is
@@ -1591,7 +1173,7 @@ void random_fade(byte type, int16_t *display_mem, int16_t ledCount, byte fadeLed
 
           if ( lastled > 24 ) {   // once faded back down fully, assign new random led location to wait on
             led_to_fade[i] = (32 * random(3, 13)) + random(3, 29); // constrain new led location so stays on panel and doesn't fuck up memory
-            fw_state[i] = 0;
+            fw_state[i] = 0;	 //random(3, 13) for full panel
             wait_interval[led_to_fade[i]] = random(fwait_min, fwait_max);
             *animation_interval = random(10, 40);
             lastled = 0;
@@ -3016,7 +2598,7 @@ void text_scroll(byte type, String text, byte text_size, byte color_type, int16_
      color types
      color_type = 0: normal one color, blank backround
      color_type = 1: inverse color
-     color_type = 2: alternate colors for each letter
+     color_type = 2: alternate colors for each letter, also used for other special color modes ( every 3 colors, highlight, etc.. )
  
   */
 
@@ -3045,17 +2627,18 @@ void text_scroll(byte type, String text, byte text_size, byte color_type, int16_
         Serial.println(i);
       }
 
-	  /*
-      if ( color_type == 2 ) {     
+	  
+      if ( color_type == 2 ) {     // alternate colors   
         if ( i % 2 == 0 ) {
           fg_color = 448;
         } else {
           fg_color = 56;
         } 
       }
-	  */
 	  
-	  if ( color_type == 2 ) {     
+	  
+	  /*
+	  if ( color_type == 2 ) {    	// 3 color cycle 
         if ( i % 3 == 0 ) {
 			fg_color = 448;
         } else if ( i % 3 == 1 ) {
@@ -3064,6 +2647,20 @@ void text_scroll(byte type, String text, byte text_size, byte color_type, int16_
 			fg_color = 7;
 		}
       }
+	  
+	  
+	  if ( color_type == 2 ) {   	// ranges of colors in text ( from voter animation )  
+        if ( i < 9 ) {
+			fg_color = 232;   // 448, 511
+        } else if ( i > 8 && i < 16 ) {
+			fg_color = 23;
+        } else {
+			fg_color = 323;
+		}
+      }
+	  */
+	  
+	  
 
       //if (letter_lookup(text[i]) == 62 ) fg_color = 448;
       
@@ -3932,6 +3529,747 @@ void maze_solve(int16_t *current_cell, byte *endnode, byte *maze_nodes, byte *ma
 }
 
 
+// ************************
+// 18: voter
+void voter(int16_t *boyCount, int16_t *girlCount, int16_t *display_mem, byte nes_state1, long *buttonFilter, byte *boyLastButtonState, byte *girlLastButtonState, byte *scoreLastButtonState, byte *boyState, byte *girlState, int16_t *character_origin, int16_t *resultLoop, int16_t *animation_interval, byte *firstToMax, byte *wait_interval, int16_t *led_to_fade, byte *fw_state, int16_t *fade_color, byte debug ) {
+
+	String scrollText = "Vote now!  boy or girl?";
+	//byte boyButtonState  	= bitRead(nes_state1, 1);	// b button
+	//byte girlButtonState 	= bitRead(nes_state1, 0);	// a button
+	//byte scoreButtonState 	= bitRead(nes_state1, 2);   // select button 
+	//byte resetScore		 	= bitRead(nes_state1, 3);	// start button
+	byte boyButtonChanged 	= 0;
+	byte girlButtonChanged 	= 0;
+	byte scoreButtonChanged = 0;
+	
+	byte boyButtonState = digitalRead(vote_boy_button);
+	byte girlButtonState = digitalRead(vote_girl_button);
+	byte scoreButtonState = digitalRead(vote_results_button);
+	
+	if ( debug == 4 ) {
+		Serial.print("boy button: ");
+		Serial.print(boyButtonState);
+		Serial.print(" girl button: ");
+		Serial.print(girlButtonState);
+		Serial.print(" result button: ");
+		Serial.println(scoreButtonState);
+	}
+
+	// button filtering. only 1 press per half-second currently will be counted
+	if( *boyState == 0 && boyButtonState != *boyLastButtonState && ( millis() - *buttonFilter > 300 ) ) {
+		boyButtonChanged = 1;
+		*boyLastButtonState = boyButtonState;
+		*buttonFilter = millis();
+	} else if ( *girlState == 0 && girlButtonState != *girlLastButtonState && ( millis() - *buttonFilter > 300 ) ) {
+		girlButtonChanged = 1;
+		*girlLastButtonState = girlButtonState;
+		*buttonFilter = millis();
+	} else if ( *boyState == 0 && *girlState == 0 && scoreButtonState != *scoreLastButtonState && ( millis() - *buttonFilter > 300 ) ) {
+		scoreButtonChanged = 1;
+		*scoreLastButtonState = scoreButtonState;
+		*buttonFilter = millis();
+	} else {
+		boyButtonChanged = 0;
+		girlButtonChanged = 0;
+		scoreButtonChanged = 0;
+	}
+	
+	// check button states, incr vote counts if needed
+	if ( boyButtonState == LOW && boyButtonChanged == 1 ) {				// check boy button
+		*boyCount = *boyCount + 1;
+		*boyState = 1;
+		clear_all(0, 512, display_mem);
+		for ( int16_t i = 0; i <= scrollText.length(); i++ ) {
+			character_origin[i] = 130 + 6 * i;
+		}
+		
+		// set first to max for boy if it got there first
+		if ( *boyCount == 128 && *firstToMax == 0 ) {
+			*firstToMax = 1;
+		}
+		
+	} else if ( girlButtonState == LOW && girlButtonChanged == 1 ) {	// check girl button
+		*girlCount = *girlCount + 1;
+		*girlState = 1;
+		clear_all(0, 512, display_mem);
+		for ( int16_t i = 0; i <= scrollText.length(); i++ ) {
+			character_origin[i] = 130 + 6 * i;
+		}
+		
+			// set first to max for boy if it got there first
+		if ( *girlCount == 128 && *firstToMax == 0 ) {
+			*firstToMax = 2;
+		}
+		
+	} else if ( scoreButtonState == LOW && scoreButtonChanged == 1 ) {	//check results button.
+	
+		*boyState = 4;
+		clear_all(0, 512, display_mem);
+		
+		//slow down animation interval during score showing to see increments, based on count, low count=slower interval
+		if ( max(*boyCount, *girlCount) < 32 ) {
+			*animation_interval = 70;
+		} else if ( max(*boyCount, *girlCount) < 50 ) {
+			*animation_interval = 20;
+		} else {
+			*animation_interval = 10;
+		}
+		
+				
+		if ( debug == 2 ) {
+			Serial.print("current count: ");
+			Serial.print("boy: ");
+			Serial.print(*boyCount);
+			Serial.print("  girl: ");
+			Serial.println(*girlCount);
+		}
+	}
+	
+	// voting states
+	// 0: idle - no button pushed
+	// 1: vote - button just pushed, display +1 in gender color at random (valid) location on screen
+	// 2: vote_wait - keep +1 on screen for ?? amount of time before fade
+	// 3: vote_fade - fade down +1, once down to zero, can go back to state 0 and accept new vote for either gender
+	// 4: show_result - jump to show result state for either boy/girl to show results, stay there until results have been shown for a bit
+	// 5: result_wait - wait state after scores are shown, how many seconds?
+	// 6: fireworks - after score wait period, jump to fireworks w/ color for winning side. for tie no fireworks.  set some amount of time ~15 seconds?
+	
+	// state 0:  if we're not processing a vote event, scroll voting screen text
+	if ( *boyState == 0 && *girlState == 0 ) {
+		text_scroll(1, scrollText, scrollText.length() + 1, 2, display_mem, 512, 7, character_origin, 0, 0); 
+	}
+	
+	// state 1:  display/fade +1 screen based on boy/girl state, assuming boy/girl states mutually exclusive except for state 0
+	if ( *boyState == 1 ) {
+		vote_plus_one(display_mem, 23);
+		*boyState = 2;
+	} else if ( *girlState == 1 ) {
+		vote_plus_one(display_mem, 323);
+		*girlState = 2;
+	}
+	
+	// state 2:  wait set amount of time before fade down starts
+	if ( *boyState == 2 && ( millis() - *buttonFilter > 600 ) ) {
+		*boyState = 3;
+	} else if ( *girlState == 2 && ( millis() - *buttonFilter > 600 ) ) {
+		*girlState = 3;
+	}
+	
+	// state 3:  once we've waited set time, start fade down ( global on whole panel is fine )
+	if( *boyState == 3 || *girlState == 3 ) {
+		
+		int16_t fade_done = 0;
+		
+		for ( int16_t i=0; i<512; i++ ) {
+			fade_done = fade_done + fade_down(i, 1, display_mem);
+		}
+		
+		// once faded down, done processing vote, go back to idle
+		if ( fade_done == 512 ) {
+			*boyState = 0;
+			*girlState = 0;
+		}
+		
+	}
+	
+	// state 4:  if we're in result show state, display vote counts
+	if ( *boyState == 4 ) {	
+	
+		// find which vote value is max, then loop up to that amount, filling in left and right columns
+		// respectively
+		int16_t maxcount = max(*boyCount, *girlCount);
+		if ( maxcount > 128 ) maxcount = 128;  // max counts for either @ 128 for display purposes
+		
+		// determine based on result Loop count what the current column and height for the counts are
+		byte column = *resultLoop / 4;
+		byte height = *resultLoop % 4;
+		
+		if ( debug == 1 ) {
+			Serial.print("resultLoop: ");
+			Serial.print(*resultLoop);
+			Serial.print("  current count: ");
+			Serial.print("boy: ");
+			Serial.print(*boyCount);
+			Serial.print("  girl: ");
+			Serial.print(*girlCount);
+			Serial.print("  max: ");
+			Serial.print(maxcount);
+			Serial.print("  column: ");
+			Serial.print(column);
+			Serial.print("  height: ");
+			Serial.print(height);
+			Serial.print("  boyState: ");
+			Serial.print(*boyState);
+			Serial.print("  girlState: ");
+			Serial.println(*girlState);
+		}
+				
+		if ( *resultLoop <= maxcount ) {
+			
+			// show boy counts
+			if ( *boyCount > *resultLoop && *boyCount > 0 ) {
+				display_mem[192 + column - (32*height)] = 23;
+				
+				//if ( debug == 1 ) {
+				//	Serial.print("display_mem:  ");
+				//	Serial.println(352+ column - (32*height));
+				//}	
+				
+			}
+			
+			// at the same time show girl counts
+			if ( *girlCount > *resultLoop && *girlCount > 0 ) {
+				display_mem[352 + column - (32*height)] = 323;
+				
+				//if ( debug == 1 ) {
+				//	Serial.print("display_mem:  ");
+				//	Serial.println(352+ column - (32*height));
+				//}	
+				
+			}
+			
+			if ( debug == 1 ) {
+				Serial.print("display_mem_352:  ");
+				Serial.print(display_mem[352]);
+				Serial.print("  display_mem_383:  ");
+				Serial.println(display_mem[383]);
+			}	
+				
+			
+			
+			// increment loop count
+			*resultLoop = *resultLoop + 1;
+			
+		} else if ( *resultLoop > maxcount ) {  // once we've counted up all the results jump to state5 ( wait state )
+			*boyState = 5;
+			*buttonFilter = millis();
+			//speed back up animation interval once done filling in scores
+			*animation_interval = 50;
+		}
+	}
+	
+	// state 5:  result wait state, just check that set amount of time has elapsed before returning control to voting ( or displaying fireworks )
+	if ( *boyState == 5 ) {
+		
+		if ( millis() - *buttonFilter > 5000 ) {   // wait 5 seconds on results before showing fireworks
+			
+			// if counts are unequal, we have a winner so jump to state 6 for fireworks, else back it idle
+			if ( *boyCount != *girlCount ) {
+				*boyState = 6;
+				*girlState = 6;
+			} else {
+				*boyState = 0;
+				*girlState = 0;
+				*animation_interval = 50;
+			}
+			clear_all(0, 512, display_mem);
+			for ( int16_t i = 0; i <= scrollText.length(); i++ ) {
+				character_origin[i] = 130 + 6 * i;
+			}
+			*resultLoop = 0;
+			
+			*buttonFilter = millis();
+		}
+	}
+	
+	// state 6:  after result viewing, display fireworks
+	if ( *boyState == 6 ) {
+			
+		// for winner, lauch fireworks animation for a bit
+		byte winner = 0;
+		if ( *boyCount > *girlCount ) {
+			winner = 2;
+		} else if ( *boyCount < *girlCount ) {
+			winner = 3;
+		}
+			
+		// only call fireworks if a clear winner is known
+		if ( winner > 0 ) {
+			random_fade(winner, display_mem, 512, 50, wait_interval, led_to_fade, 10, 40, fw_state, fade_color, 2, debug, animation_interval );
+			//random_fade(m_type, display_mem, adeLeds, wait_interval, led_to_fade, in, ax, fw_state, fade_color, firework_count, debug, &animation_interval );
+		}
+		
+		if ( debug == 1 ) {
+			//Serial.println("result_wait..");
+			//Serial.print("boy: ");
+			//Serial.print(*boyCount);
+			//Serial.print("  girl: ");
+			//Serial.println(*resultLoop);
+		}
+		
+		// after set firework period, back to voting ( idle )
+		if ( millis() - *buttonFilter > 10000 ) {   // 10s of fireworks
+			clear_all(0, 512, display_mem);
+			*boyState = 0;
+			*girlState = 0;
+			*animation_interval = 50;
+		}
+	}
+	
+	/*
+	if ( resetScore == LOW ) {
+		*boyCount = 0;
+		*girlCount = 0;
+		*firstToMax = 0;
+	}
+	*/
+
+}
+
+// #################################################################
+// 19: pong.. still a little buggy
+
+void pong(byte type, int16_t *display_mem, int16_t ledCount, byte nes_state1, int16_t *nes_location, byte *paddle_width, int16_t *score, byte *direction_x, byte *direction_y, byte *location_x, byte *location_y, byte *speed_x, byte *speed_y, byte *interval_counter, int16_t *ball_color, byte debug, byte *red_row, byte *orange_row, byte *yellow_row, byte *green_row, byte *blue_row, int16_t *animation_interval ) {
+
+	
+	// grab current NES control button state
+	byte left, right, flash, start, select, a, b = 1;
+
+	left = bitRead(nes_state1, 6);
+	right = bitRead(nes_state1, 7);
+	start = bitRead(nes_state1, 3);
+	select = bitRead(nes_state1, 2);
+	a = bitRead(nes_state1, 0);
+	b = bitRead(nes_state1, 1);
+	
+	
+	//re-init game when user presses start
+	if ( start == 0 ) {
+		
+		if ( type == 0 ) {
+			direction_x[0] = random(0, 2);
+			direction_y[0] = random(1, 2);
+			location_x[0] = random(0, 32);
+			location_y[0] = random(0, 3);
+			speed_x[0] = B00000001 << random(0, 3);
+			//speed_y[0] = speed_x[0];
+			speed_y[0] = B00000001 << random(0,3);
+			//ball_color[i] = (7*random(0,2)) + (56*random(0,2))+(448*random(0,2));
+			ball_color[0] = random(0, 512);
+			flash = 0;
+		
+		} else if ( type == 1 ) {
+			
+			direction_x[0] = random(0, 2);
+			direction_y[0] = random(1, 2);
+			location_x[0] = random(6, 25);
+			location_y[0] = 8;
+			speed_x[0] = B00000001 << random(2, 3);
+			//speed_y[0] = speed_x[0];
+			speed_y[0] = B00000001 << random(2,3);
+			//ball_color[i] = (7*random(0,2)) + (56*random(0,2))+(448*random(0,2));
+			ball_color[0] = 511;
+			for ( byte i = 0; i < 20; i++ ) {
+				red_row[i] = 1; 
+				orange_row[i] = 1;
+				yellow_row[i] = 1;
+				green_row[i] = 1;
+				blue_row[i] = 1;
+			}
+			
+		}
+		clear_all(0, ledCount, display_mem);
+		*nes_location = 494;   // starting paddle location
+		*interval_counter = 0;
+		*score = 0;
+	}
+	
+	// ********************  pong style  *******************************
+	if ( type == 0  ) {
+
+		//change paddle width when user presses select  ( make this a level thing later )
+		if ( select == 0 ) {
+		
+			if (*paddle_width < 8 ) {
+			*paddle_width = *paddle_width + 1;
+			} else {
+			*paddle_width = 2;
+			}
+		}
+		
+		
+		// check direction buttons and move paddle to new location
+		if ( left == 0 ) {
+			if (*nes_location > 480 ) {         // move left
+			*nes_location = *nes_location - 1;
+			}
+		} else if ( right == 0 ) {
+			if (*nes_location < (512 - *paddle_width) ) {             // move right
+			*nes_location = *nes_location + 1;
+			}
+		}
+		
+		// draw paddle now
+		draw_paddle(display_mem, *nes_location, *paddle_width, type);
+		
+		// calculate new position for ball
+		
+		//clear last frame
+		display_mem[location_x[0] + (32 * location_y[0])] = 0;
+		
+		// calculate new X position if interval counter is multiple of ball's speed rating ( high speed rating means lower update interval in this case )
+		if ( *interval_counter % speed_x[0] == 0 ) {
+			if (location_x[0] == 31 ) {    // at right edge, change direction left
+			location_x[0]--;
+			direction_x[0] = 0;
+			} else if ( location_x[0] == 0 ) {     // at left edge, change direction right
+			location_x[0]++;
+			direction_x[0] = 1;
+			} else if ( location_x[0] < 31 && direction_x[0] == 1) {
+			location_x[0]++;
+			}  else if ( location_x[0] > 0 && direction_x[0] == 0 ) {
+			location_x[0]--;
+			}
+		}
+		
+		// calculate new Y position, same deal with the speed_y setting, y position only "reflects" from bottom if ball strikes paddle
+		if ( *interval_counter % speed_y[0] == 0 ) {
+			if ( location_y[0] < 14 && direction_y[0] == 1) {
+			location_y[0]++;
+			}  else if ( location_y[0] > 0 && direction_y[0] == 0 ) {
+			location_y[0]--;
+			} else if ( location_y[0] == 14 && direction_y[0] == 1) {    // at bottom and falling, change direction up if x location is within paddle range
+		
+			// check that ball location is on paddle
+			if ( (location_x[0] + 480) >= *nes_location && (location_x[0] + 480) < (*nes_location + *paddle_width) ) {
+				location_y[0]--;
+				direction_y[0] = 0;
+				*score = *score + 1;
+			} else {
+				location_y[0] = 16;
+				flash = 1;
+				if (debug == 1) {
+				Serial.print(location_x[0]);
+				Serial.print("  ");
+				Serial.println(*nes_location);
+				}
+			}
+			} else if ( location_y[0] == 0  ) {    // at top, change direction down
+			location_y[0]++;
+			direction_y[0] = 1;
+			}
+		}
+		
+		// draw ball
+		if (location_y[0] < 16 ) {
+			display_mem[location_x[0] + (32 * location_y[0])] = ball_color[0];
+		}
+		
+		// show score at top if ball escaped
+		if (flash == 1) {
+			for ( byte i = 0; i < *score; i++ ) {
+			display_mem[i] = 56;
+			}
+			display_mem[location_x[0]] = 448;
+		}
+		
+	
+	// ********************  breakout style  *******************************
+	
+	} else if ( type == 1 ) {
+		
+		// check direction buttons and move paddle to new location
+		if ( left == 0 ) {
+			if (*nes_location > 486 ) {         // move left
+				*nes_location = *nes_location - 1;
+			}
+		} else if ( right == 0 ) {
+			if (*nes_location < (506 - *paddle_width) ) {             // move right
+				*nes_location = *nes_location + 1;
+			}
+		}
+		
+		// draw paddle now
+		draw_paddle(display_mem, *nes_location, *paddle_width, type);
+		
+		// calculate new position for ball
+		
+		//clear last frame
+		display_mem[location_x[0] + (32 * location_y[0])] = 0;
+		
+		// store old x location, may need it for brick removal later
+		byte old_x = location_x[0];
+		byte old_y = location_y[0];
+		
+		// calculate new X position if interval counter is multiple of ball's speed rating ( high speed rating means lower update interval in this case )
+		if ( *interval_counter % speed_x[0] == 0 ) {
+			if (location_x[0] == 25 ) {    			// at right edge, change direction left
+			location_x[0]--;
+			direction_x[0] = 0;
+			} else if ( location_x[0] == 6 ) {     	// at left edge, change direction right
+			location_x[0]++;
+			direction_x[0] = 1;
+			} else if ( location_x[0] < 26 && direction_x[0] == 1) {
+			location_x[0]++;
+			}  else if ( location_x[0] > 6 && direction_x[0] == 0 ) {
+			location_x[0]--;
+			}
+		}
+		
+		// calculate new Y position, same deal with the speed_y setting, y position only "reflects" from bottom if ball strikes paddle
+		if ( *interval_counter % speed_y[0] == 0 ) {
+			
+		if ( location_y[0] < 14 && direction_y[0] == 1) {					// not at bottom and falling, keep falling
+				location_y[0]++;
+			}  else if ( location_y[0] > 7 && direction_y[0] == 0 ) {		// not at top and rising, keep rising
+				location_y[0]--;
+			} else if ( location_y[0] == 14 && direction_y[0] == 1) {   	// at bottom and falling, change direction up if x location is within paddle range
+		
+				// check that ball location is on paddle
+				if ( (location_x[0] + 480) >= *nes_location && (location_x[0] + 480) < (*nes_location + *paddle_width) ) {
+					location_y[0]--;
+					direction_y[0] = 0;
+					*score = *score + 1;
+				} else {
+					location_y[0] = 15;
+					flash = 1;
+					if (debug == 1) {
+						Serial.print(location_x[0]);
+						Serial.print("  ");
+						Serial.println(*nes_location);
+					}
+				}
+			} else if ( location_y[0] == 15 ) {								// at bottom, game over
+				flash = 1;
+							
+			// now that temporary new x and y locations are known, check to see if we're hittin' the bricks
+			
+			} else if ( location_y[0] <= 7 && direction_y[0] == 0 ) {    							// in brick zone and rising, need to check here if ball is striking bricks here and if so, break brick
+				
+				//now that we're into potentially brick wall territory, need to check the brick rows to see if there are bricks present
+				//that the ball should hit and eliminate
+					
+				//check each brick row individually, if there is a solid brick above current y location, remove it and reflect, otherwise continue upwards
+				switch (location_y[0]) {
+				
+				// blue row
+				case 7:
+					if ( blue_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
+						blue_row[old_x - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+					} else if ( blue_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
+						blue_row[location_x[0] - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+						
+						if (direction_x[0] == 1 ){
+								
+							if ( old_x == 6 ) {		// just reflected off left wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 0;
+								location_x[0] = old_x - 1;
+							}
+							
+						} else if (direction_x[0] == 0) {
+							
+							if ( old_x == 25 ) {  	// just reflected off right wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 1;
+								location_x[0] = old_x + 1;
+							}
+						}
+						
+					} else {								// pass through up to next row
+						location_y[0]--;
+					}
+					break;
+					
+				//green row	
+				case 6:
+					if ( green_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
+						green_row[old_x - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+					} else if ( green_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
+						green_row[location_x[0] - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+						
+						if (direction_x[0] == 1 ){
+								
+							if ( old_x == 6 ) {		// just reflected off left wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 0;
+								location_x[0] = old_x - 1;
+							}
+							
+						} else if (direction_x[0] == 0) {
+							
+							if ( old_x == 25 ) {  	// just reflected off right wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 1;
+								location_x[0] = old_x + 1;
+							}
+						}
+						
+					} else {								// pass through up to next row
+						location_y[0]--;
+					}
+					break;
+				
+					
+				// yellow row
+				case 5:
+					if ( yellow_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
+						yellow_row[old_x - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+					} else if ( yellow_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
+						yellow_row[location_x[0] - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+						
+						if (direction_x[0] == 1 ){
+								
+							if ( old_x == 6 ) {		// just reflected off left wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 0;
+								location_x[0] = old_x - 1;
+							}
+							
+						} else if (direction_x[0] == 0) {
+							
+							if ( old_x == 25 ) {  	// just reflected off right wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 1;
+								location_x[0] = old_x + 1;
+							}
+						}
+						
+					} else {								// pass through up to next row
+						location_y[0]--;
+					}
+					break;
+					
+				// orange row
+				case 4:
+					if ( orange_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
+						orange_row[old_x - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+					} else if ( orange_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
+						orange_row[location_x[0] - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+						
+						if (direction_x[0] == 1 ){
+								
+							if ( old_x == 6 ) {		// just reflected off left wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 0;
+								location_x[0] = old_x - 1;
+							}
+							
+						} else if (direction_x[0] == 0) {
+							
+							if ( old_x == 25 ) {  	// just reflected off right wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 1;
+								location_x[0] = old_x + 1;
+							}
+						}
+						
+					} else {								// pass through up to next row
+						location_y[0]--;
+					}
+					break;
+						
+				// red row
+				case 3:
+					if ( red_row[old_x - 6] == 1 ) {		// hit solid brick row, remove block and reflect ball
+						red_row[old_x - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+					} else if ( red_row[location_x[0] - 6] == 1 ) {   // check if hitting brick on diagonal, if so, reflect both x and y
+						red_row[location_x[0] - 6] = 0;
+						location_y[0]++;
+						direction_y[0] = 1;
+						
+						if (direction_x[0] == 1 ){
+								
+							if ( old_x == 6 ) {		// just reflected off left wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 0;
+								location_x[0] = old_x - 1;
+							}
+							
+						} else if (direction_x[0] == 0) {
+							
+							if ( old_x == 25 ) {  	// just reflected off right wall
+								// do nothing, already ok
+							} else {
+								direction_x[0] = 1;
+								location_x[0] = old_x + 1;
+							}
+						}
+						
+					} else {								// pass through up to next row
+						location_y[0]--;
+					}
+					break;
+						
+				//above red row now
+				default:									// above top row here, reflect off top of game space if hits
+					if ( location_y[0] > 0 ) {
+						location_y[0]--;
+					} else {
+						location_y[0]++;
+						direction_y[0] = 1;
+					}
+					
+				}
+				
+			}
+		}
+		
+		// draw game space
+		drawBreakoutRows(red_row, orange_row, yellow_row, green_row, blue_row, display_mem );
+		
+			// draw white ball
+		if (location_y[0] < 16 ) {
+			display_mem[location_x[0] + (32 * location_y[0])] = 511;
+		}
+		
+		// show score at top if ball escaped
+		if (flash == 1) {
+			for ( byte i = 0; i < *score; i++ ) {
+			display_mem[i] = 56;
+			}
+			//display_mem[location_x[0]] = 448;
+		}
+		
+	}
+	
+	// lastly increment interval counter, used to determine whether or not to update an led's position based on it's speed setting
+	if ( *interval_counter < 15 ) {
+		*interval_counter = *interval_counter + 1;
+	} else {
+		*interval_counter = 0;
+	}
+	
+	// speed up / slow down fill w/ a/b
+	if ( a == 0 ) {
+		*animation_interval = *animation_interval - 1;
+		*animation_interval = constrain(*animation_interval, 30, 2000);
+	}
+
+	if ( b == 0 ) {
+		*animation_interval = *animation_interval + 1;
+		*animation_interval = constrain(*animation_interval, 30, 2000);
+	}
+
+
+}
 
 // ********************************************************  helpers *************************************************************************
 // display hello message at startup/reset
@@ -4277,12 +4615,12 @@ byte check_code( byte *current_code, byte button, byte last_button, const byte *
 
 // ************************
 // blink a selected location white for .1 seconds
-void cursor_blink(int16_t location, int16_t *display_mem) {
+void cursor_blink(int16_t location, int16_t *display_mem, int16_t color) {
 
-  // save off currrent state so we can load it back when done
+  // save off current state so we can load it back when done
   int16_t save_state = display_mem[location];
 
-  display_mem[location] = 511;
+  display_mem[location] = color;
   delay(50);
   display_mem[location] = 0;
   delay(50);
@@ -5267,4 +5605,38 @@ void drawBreakoutRows(byte *red_row, byte *orange_row, byte *yellow_row, byte *g
 		}
 	}
 
+}
+
+// ************************
+// draw +1 for vote, random legal location
+void vote_plus_one(int16_t *display_mem, int16_t color){
+	
+	//first pick random legal starting points
+	byte x_pos = random(0, 27);
+	byte y_pos = random(5, 12);
+	
+	int16_t loc = 32*y_pos + x_pos;
+	
+	// now draw +1 at that location
+	display_mem[loc+3] = color;
+	display_mem[loc+4] = color;
+	display_mem[loc+5] = color;
+	
+	display_mem[loc-31] = color;
+	display_mem[loc-28] = color;
+	
+	display_mem[loc-64] = color;
+	display_mem[loc-63] = color;
+	display_mem[loc-62] = color;
+	display_mem[loc-60] = color;
+	
+	display_mem[loc-95] = color;
+	display_mem[loc-92] = color;
+	
+	display_mem[loc-125] = color;
+	display_mem[loc-124] = color;
+	
+	display_mem[loc-156] = color;
+	
+	
 }

@@ -98,13 +98,14 @@
  07.15: started BT testing instead of wifi, removed wifi code for this branch
  07.19: added option change control for BT commands from Android, will expand for other animations
  08.08:	added pulldown on nes1 port for presence detect, if no controller is plugged, read 0
-		also added bt communication back to phone to tell it current animation, can use this for other stuff as well eventually
+		also added bt ommunication back to phone to tell it current animation, can use this for other stuff as well eventually
+ 01.09: HNY added voter for upcoming shower
  
 animation_number        animation
 0                       nes_paint
 1                       blink_rand_interval
 2                       bounce
-3                       rain animation
+3                       rain animation / pong  NEED TO MOVE PONG TO IT'S OWN VALUE
 4                       static color test ( clear_all w/ color argument )
 4                       random fill, unfill of display, random or fixed color
 5                       random led on fade off
@@ -120,6 +121,8 @@ animation_number        animation
 15                      snake
 16						life
 17						maze
+18						voter
+19						pong / breakout
 
 
 TODO:  general code cleanup, updated animations
@@ -134,12 +137,12 @@ TODO:  general code cleanup, updated animations
 // control overall flow of pgm
 byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
 int cycle_time = 7500;	       // time in ms to wait between switching to next animation in sequence
-const byte debug = 0;          // set to 1 to get serial data out for debug
+const byte debug = 1;          // set to 1 to get serial data out for debug
 const byte bluetooth = 1;	   // set to 1 to enable BT shield
 byte cal = 0;            	   // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
 const byte code_array[14] = { 0, 0, 1, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7};
-byte animation_sequence[18] = {0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 15, 16, 17, 99, 14, 99, 0, 99};
+byte animation_sequence[18] = {0, 1, 2, 3, 5, 6, 7, 8, 9, 19, 15, 16, 17, 99, 14, 99, 0, 99};	// sequence of animations that pressing button or cycling will cycle through
 byte controller_plugged = 0;   // global for whether or not controller is plugged into port
 
 // static defines
@@ -183,6 +186,10 @@ byte controller_plugged = 0;   // global for whether or not controller is plugge
 #define sense_select1 41
 #define sense_select2 42
 #define sense_select3 43
+
+#define vote_boy_button 2
+#define vote_girl_button 3
+#define vote_results_button 4
 
 
 // general variables used for LED control
@@ -397,7 +404,7 @@ float gravity = 0.1;
 byte drop_stack_limit[32] = {5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5};
 
 //variable for text scrolling
-String scrollText = "text scrolling";
+String scrollText = "Vote now:  boy or girl?";
 String scrollTime = String(millis());
 int16_t text_color = 6;
 int16_t character_origin[140];  // grr. fixed length  140 is alot though.. right, twitter?
@@ -463,6 +470,21 @@ byte visted_nodes[105];				// since not using recursion when solving maze ( for 
 byte wall_update = 0;				// indicate to solver that we just want to update the state of the wall LED this run through the loop, makes sole animation smoother
 byte next_cell = 0;					// to smoothen animation, need to store next node found 
 
+
+// vars for vote, reused           previous variable used, make sure to init properly!
+// int16_t boyCount 	   		// food1 field from snake
+// int16_t girlCount	 		// food2 field from snake
+// unsigned long buttonFilter 	// stopwatch_time from stopwatch 
+// byte boyLastButtonState		// dead1 from snake
+// byte girlLastButtonState		// dead2 from snake
+// byte boyState				// dir1 from snake
+// byte girlState				// dir2 from snake
+// int16_t resultLoop			// current_cell from maze
+// byte scoreLastButtonState	// foodmode from snake
+// byte firsToMax				// next_cell from maze
+
+
+ 
 
 // the setup routine runs once when you press reset:
 void setup()  {
@@ -531,6 +553,11 @@ void setup()  {
 
   // set button to be used as input to cycle though animation sequences
   pinMode(cycle_button, INPUT);
+  
+  // define voter box buttons as inputs
+  pinMode(vote_boy_button, INPUT);
+  pinMode(vote_girl_button, INPUT);
+  pinMode(vote_results_button, INPUT);
 
   // set pin mode for ir array enable
   pinMode(ir_array_enable, OUTPUT);
@@ -662,9 +689,32 @@ void setup()  {
   // display welcome screen
   splash(0, display_mem);
   clear_all(0, ledCount, display_mem);
+  
+  /*
+	// setup state properly to go right into voter mode    SJH*******
+	animation_interval = 50;
+	food1 = 0;
+	food2 = 0;
+	stopwatch_time = millis();
+	dead1 = 0;
+	dead2 = 0;
+	dir1 = 0;
+	dir2 = 0;
+	current_cell = 0;
+	foodmode = 0;
+	next_cell = 0;
+	for ( int16_t i = 0; i <= scrollText.length(); i++ ) {
+		character_origin[i] = 130 + 6 * i;
+	}
+	for ( byte i = 0; i < fadeLeds; i++) {
+		led_to_fade[i] = (32 * random(3, 13)) + random(3, 28); // constrain initial points so fireworks will be fully on panel
+		fw_state[i] = 0;
+		wait_interval[i] = fwait_min;
+	}
+  */
 
 
-  if (debug == 1 ) {
+  if (debug == 6 ) {
 
     Serial.print("scrollText length: ");
     Serial.println( scrollText.length() );
@@ -798,9 +848,8 @@ void loop()  {
 			bounce(random_type, display_mem, &balls, ball_max, location_x, location_y, direction_x, direction_y, speed_x, speed_y, &interval_counter, ball_color, shape, ledCount, nes_state1, &animation_interval, &fade_step );
 			break;
 		case 3:
-			// pong
-			pong( random_type, display_mem, ledCount, nes_state1, &nes_location, &paddle_width, &score, direction_x, direction_y, location_x, location_y, speed_x, speed_y, &interval_counter, ball_color, debug, red_row, orange_row, yellow_row, green_row, blue_row, &animation_interval );
-			//rain(random_type, display_mem, nes_state1, drop_state, drop_pos_y, drop_wait_count, drop_color, drop_wait_time, drop_fall_timer, &gravity, drop_stack_top, drop_stack_limit, debug );
+			// rain
+			rain(random_type, display_mem, nes_state1, drop_state, drop_pos_y, drop_wait_count, drop_color, drop_wait_time, drop_fall_timer, &gravity, drop_stack_top, drop_stack_limit, debug );
 			break;
 		case 4:
 			// clear all ( random static color )
@@ -871,8 +920,16 @@ void loop()  {
 			life(&random_type, &iteration, display_mem, ledCount, gamestate, nes_state1, &animation_interval, wave_color, debug);
 			break;
 		case 17: 
-			// maze, currently does nothing, eventually have solver called here
+			// maze solver
 			maze_solve(&current_cell, &endnode, maze_nodes, maze_walls, nodestack, &stack_index, display_mem, &wall_update, wave_color, nes_state1, &animation_interval, &mode_time, &random_type, &next_cell, debug );
+			break;
+		case 18:
+			// boy/girl voter ** note makes use of variables from other animations
+			voter(&food1, &food2, display_mem, nes_state1, &stopwatch_time, &dead1, &dead2, &foodmode, &dir1, &dir2, character_origin, &current_cell, &animation_interval, &next_cell, wait_interval, led_to_fade, fw_state, fade_color, debug );
+			break;
+		case 19:
+			// pong / breakout
+			pong( random_type, display_mem, ledCount, nes_state1, &nes_location, &paddle_width, &score, direction_x, direction_y, location_x, location_y, speed_x, speed_y, &interval_counter, ball_color, debug, red_row, orange_row, yellow_row, green_row, blue_row, &animation_interval );	
 			break;
 		
 
@@ -1240,41 +1297,8 @@ void next_animation(byte switchto) {
 
     case 3:
 
-		// pong... stil need to fix this
-		nes_on();
-		nes_location = 494;   // starting paddle location
-		random_type = 1;
-		direction_x[0] = random(0, 2);
-		direction_y[0] = random(1, 2);
-		location_x[0] = random(0, 32);
-		location_y[0] = random(0, 3);
-		speed_x[0] = B00000001 << random(0, 3);
-		speed_y[0] = speed_x[0];
-		
-		if ( random_type == 1 ) {
-			for ( byte i = 0; i < 20; i++ ) {
-				red_row[i] = 1; 
-				orange_row[i] = 1;
-				yellow_row[i] = 1;
-				green_row[i] = 1;
-				blue_row[i] = 1;
-			}
-			
-			location_x[0] = random(6, 25);
-			location_y[0] = 8;
-			
-			speed_x[0] = B00000001 << random(2, 3);
-			speed_y[0] = speed_x[0];
-			
-		}
-		
-		//speed_y[i] = B00000001 << random(0,3);
-		//ball_color[i] = (7*random(0,2)) + (56*random(0,2))+(448*random(0,2));
-		ball_color[0] = random(0, 512);
-		interval_counter = 0;
-	
 		// rain
-		/*
+		
 		nes_on();
 		temp_color = random(1, 512);
 		random_type = random(0, 2);
@@ -1292,10 +1316,10 @@ void next_animation(byte switchto) {
 			drop_stack_top[i] = 16;
 			drop_stack_limit[i] = random(3,14);
 			gravity = (random(1, 11) / 10.0);
-		}*/
+		}
 	
 		animation_interval = 30;
-		animation_name = "pong";
+		animation_name = "rain";
 		break;
 	
 	case 4:
@@ -1324,7 +1348,7 @@ void next_animation(byte switchto) {
 		firework_count = random(1, 6);
 		for ( byte i = 0; i < fadeLeds; i++) {
 			led_to_fade[i] = (32 * random(3, 13)) + random(3, 28); // constrain initial points so fireworks will be fully on panel
-			fw_state[i] = 0;
+			fw_state[i] = 0;	 //random(3, 13) for full panel
 			wait_interval[i] = fwait_min;
 		}
 		animation_interval = 50;  //100
@@ -1543,6 +1567,72 @@ void next_animation(byte switchto) {
 		wave_color[1] = random(1,512);
 		init_maze(maze_nodes, maze_walls, nodestack, &stack_index, ledCount, display_mem, &current_cell, wave_color, &random_type, &wall_update, debug);
 		animation_name = "maze";
+		break;
+		
+	case 18:
+		
+		// voter
+		nes_on();
+		animation_interval = 50;
+		animation_name = "voter";
+		food1 = 0;
+		food2 = 0;
+		stopwatch_time = millis();
+		dead1 = 0;
+		dead2 = 0;
+		dir1 = 0;
+		dir2 = 0;
+		current_cell = 0;
+		foodmode = 0;
+		next_cell = 0;
+		for ( int16_t i = 0; i <= scrollText.length(); i++ ) {
+			character_origin[i] = 130 + 6 * i;
+		}
+		for ( byte i = 0; i < fadeLeds; i++) {
+			led_to_fade[i] = (32 * random(3, 13)) + random(3, 28); // constrain initial points so fireworks will be fully on panel
+			fw_state[i] = 0;
+			wait_interval[i] = fwait_min;
+		}
+		break;	
+		
+	case 19:
+	
+		// pong / breakout ... need to fix this
+		nes_on();
+		nes_location = 494;   // starting paddle location
+		random_type = 1;
+		direction_x[0] = random(0, 2);
+		direction_y[0] = random(1, 2);
+		location_x[0] = random(0, 32);
+		location_y[0] = random(0, 3);
+		speed_x[0] = B00000001 << random(0, 3);
+		speed_y[0] = speed_x[0];
+		
+		if ( random_type == 1 ) {
+			for ( byte i = 0; i < 20; i++ ) {
+				red_row[i] = 1; 
+				orange_row[i] = 1;
+				yellow_row[i] = 1;
+				green_row[i] = 1;
+				blue_row[i] = 1;
+			}
+			
+			location_x[0] = random(6, 25);
+			location_y[0] = 8;
+			
+			speed_x[0] = B00000001 << random(2, 3);
+			speed_y[0] = speed_x[0];
+			
+		}
+		
+		//speed_y[i] = B00000001 << random(0,3);
+		//ball_color[i] = (7*random(0,2)) + (56*random(0,2))+(448*random(0,2));
+		ball_color[0] = random(0, 512);
+		interval_counter = 0;
+		
+		animation_interval = 30;
+		animation_name = "pong";
+		break;
 	
 	}
 	

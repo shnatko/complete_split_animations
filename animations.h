@@ -22,6 +22,8 @@
    15                      it's a secret to everyone
    16					   life
    17					   maze
+   18					   voter
+   19					   pong / breakout
    
    
 */
@@ -34,6 +36,11 @@
 
 // grrr the compiler doesn't know what a byte is...
 typedef unsigned char byte;
+
+#define vote_boy_button 2
+#define vote_girl_button 3
+#define vote_results_button 4
+
 
 void nes_paint(volatile byte*, byte*, int16_t*, int16_t*, int16_t, int16_t*, int16_t*, byte*, byte, const byte*, byte*, int16_t*, byte*, byte*, byte*, byte, byte*, byte*, int16_t*, int16_t*, byte* );
 void blink_rand_interval(byte, byte*, int16_t, int16_t*, int16_t*, int16_t*, byte, int16_t* );
@@ -54,6 +61,8 @@ void tetris(byte*, byte*, byte*, byte*, byte*, unsigned long*, int16_t*, byte*, 
 void snake(byte*, int16_t*, int16_t*, int16_t, byte, byte, int16_t*, int16_t*, byte*, byte*, byte*, byte*, int16_t*, int16_t*, byte*, const byte, int16_t*, byte);
 void life(byte*, int*, int16_t*, int16_t, byte*, byte, int16_t*, int16_t*, byte);
 void maze_solve(int16_t*, byte*, byte*, byte*, byte*, char*, int16_t*, byte*, int16_t*, byte, int16_t*, unsigned long*, byte*, byte*, byte);
+void voter(int16_t*, int16_t*, int16_t*, byte, long*, byte*, byte*, byte*, byte*, byte*, int16_t*, int16_t*, int16_t*, byte*, byte*, int16_t*, byte*, int16_t*, byte );
+
 
 
 
@@ -63,7 +72,7 @@ void clear_all(int16_t, int16_t, int16_t*);
 void blankchar(int16_t, int16_t, int16_t*);
 void printchar(int16_t, int16_t, char, int16_t*);
 byte check_code( byte*, byte, byte, const byte* );
-void cursor_blink(int16_t, int16_t*);
+void cursor_blink(int16_t, int16_t*, int16_t);
 byte fade_down(int16_t, byte, int16_t*);
 byte fade_up(int16_t, int16_t, int16_t*);
 void draw_paddle(int16_t*, int16_t, byte, byte);
@@ -88,6 +97,8 @@ byte checkMazeNodes(byte*);
 void set_wall(byte, byte, int16_t, int16_t*);
 void colorchange(int16_t, int16_t, int16_t*, int16_t);
 void drawBreakoutRows(byte*, byte*, byte*, byte*, byte*, int16_t*);
+void vote_plus_one(int16_t*, int16_t);
+
 
 
 
