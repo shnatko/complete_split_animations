@@ -1898,7 +1898,7 @@ void lines( byte type, int16_t *display_mem, int16_t ledCount, byte *line_type, 
 
 // #################################################################
 // 8: color chase
-void chaser(byte type, int16_t ledCount, int16_t *display_mem, byte nes_state1, byte *dir, byte *time_chaser_cycle, byte chaser_cycle, byte *last_x0, byte *last_y0, byte *last_x1, byte *last_y1, short *cur_x, short *cur_y, int16_t *fade_color, byte *random_type, int16_t *animation_interval, unsigned long *previousSenseMillis, int16_t fade_color_interval ) {
+void chaser(byte type, int16_t ledCount, int16_t *display_mem, byte nes_state1, byte *dir, byte *time_chaser_cycle, byte chaser_cycle, byte *last_x0, byte *last_y0, byte *last_x1, byte *last_y1, short *cur_x, short *cur_y, int16_t *fade_color, byte *random_type, int16_t *animation_interval, unsigned long *previousSenseMillis, int16_t fade_color_interval, byte *dir_count0, byte *dir_count1, byte dir_count0, byte dir_count1, byte debug ) {
 
   byte a, b, up, down, left, right, sel, start = 1;
   byte reset = 0;
@@ -1906,13 +1906,21 @@ void chaser(byte type, int16_t ledCount, int16_t *display_mem, byte nes_state1, 
   int16_t led_position1 = 32 * cur_y[1] + cur_x[1];
   byte y_mode0, y_mode1 = 0;
   byte x_mode0, x_mode1 = 0;
+  byte update = 0;
 
-  if ( display_mem[led_position] == 0 ) {
+  if ( type != 9 && display_mem[led_position] == 0 ) {
     display_mem[led_position] = fade_color[0];
+	if ( debug == 3 ) {
+		Serial.print("led: ");
+		Serial.print(led_position);
+		Serial.println(" is off, turning on");
+	}
   } else {
 
-    for ( int16_t j = 0; j < ledCount; j++) {
-      fade_down(j, 1, display_mem);
+    if ( type < 8 ) {
+		for ( int16_t j = 0; j < ledCount; j++) {
+			fade_down(j, 1, display_mem);	
+		}
     }
     //display_mem[led_position] = 0;
 
@@ -1927,6 +1935,7 @@ void chaser(byte type, int16_t ledCount, int16_t *display_mem, byte nes_state1, 
     6        left to right snake
     7        right to left snake
     8        random walk
+	9		 random draw, illuminate off pixel, turn off illuminated pixel
     */
 
     switch (type) {
@@ -2169,10 +2178,20 @@ void chaser(byte type, int16_t ledCount, int16_t *display_mem, byte nes_state1, 
 
       case 8:  // random walk around the array, each update cycle either increment, decrement, or do nothing to cur_x and cur_y
 
-        y_mode0 = random(0, 3);
-        x_mode0 = random(0, 3);
-        y_mode1 = random(0, 3);
-        x_mode1 = random(0, 3);
+		if ( *dir_count0 > dir_threshold0 ) {
+			y_mode0 = random(0, 3);
+			x_mode0 = random(0, 3);
+			*dir_count0 = 0;
+		} else {
+			*dir_count0 = *dir_count0 + 1;
+		}
+		if ( *dir_count1 > dir_threshold1 ) {
+			y_mode1 = random(0, 3);
+			x_mode1 = random(0, 3);
+			*dir_count1 = 0;
+		} else {
+			*dir_count1 = *dir_count1 + 1;
+		}
 
         // calc new poistion for first wandering led
         if ( x_mode0 == 0 ) {
@@ -2235,16 +2254,73 @@ void chaser(byte type, int16_t ledCount, int16_t *display_mem, byte nes_state1, 
 
         if ( (cur_x[0] == 31 && cur_y[0] == 15) || (cur_x[1] == 31 && cur_y[1] == 15) ) reset = 1;
         break;
+		
+	  case 9:  // random walk around the array, turn on an off pixel, turn off an on pixel
+
+        y_mode0 = random(0, 3);
+        x_mode0 = random(0, 3);
+		update = 0;
+     
+		// calc new position for first wandering led
+        if ( x_mode0 == 0 ) {
+          if (cur_x[0] < 31 ) {
+            cur_x[0]++;
+            *last_x0 = x_mode0;
+			update = 1;
+          }
+        } else if ( x_mode0 == 1 ) {
+          if (cur_x[0] > 0 ) {
+            cur_x[0]--;
+            *last_x0 = x_mode0;
+			update = 1;
+          }
+        } else if ( x_mode0 == 2 ) {
+          *last_x0 = x_mode0;
+        }
+
+        if ( y_mode0 == 0 ) {
+          if (cur_y[0] < 15 ) {
+            cur_y[0]++;
+            *last_y0 = y_mode0;
+			update = 1;
+          }
+        } else if ( y_mode0 == 1 ) {
+          if (cur_y[0] > 0 ) {
+            cur_y[0]--;
+            *last_y0 = y_mode0;
+			update = 1;
+          }
+        } else if ( y_mode0 == 2 ) {
+          *last_y0 = y_mode0;
+        }
 
     }
 
-    led_position = 32 * cur_y[0] + cur_x[0];
-    display_mem[led_position] = fade_color[0];
-
-    if ( type == 8 ) {
-      led_position1 = 32 * cur_y[1] + cur_x[1];
-      display_mem[led_position1] = fade_color[1];
-    }
+	// update the current led now based on the selected type
+	if ( type < 8 ) {
+		led_position = 32 * cur_y[0] + cur_x[0];
+		display_mem[led_position] = fade_color[0];
+	} else if ( type == 8 ) {
+		led_position1 = 32 * cur_y[1] + cur_x[1];
+		display_mem[led_position1] = fade_color[1];
+	} else if ( type == 9 && update == 1 ) {
+		led_position = 32 * cur_y[0] + cur_x[0];
+		if ( display_mem[led_position] == 0 ) {
+			display_mem[led_position] = fade_color[0];
+			if ( debug == 3 ) {
+				Serial.print("led: ");
+				Serial.print(led_position);
+				Serial.println(" is off, turning on");
+			}
+		} else {
+			display_mem[led_position] = 0;
+			if ( debug == 3 ) {
+				Serial.print("led: ");
+				Serial.print(led_position);
+				Serial.println(" is on, turning off");
+			}
+		}
+	}
 
   }
 
@@ -2304,7 +2380,7 @@ void chaser(byte type, int16_t ledCount, int16_t *display_mem, byte nes_state1, 
     if ( fade_color[0] > 511 ) fade_color[0] = 1;
     if ( fade_color[1] > 511 ) fade_color[1] = 1;
     *random_type = random(0, 9);
-	*random_type = 8;
+	*random_type = 9;
     if ( *random_type == 3 || *random_type == 7 ) {
       cur_x[0] = 31;
       cur_y[0] = 15;

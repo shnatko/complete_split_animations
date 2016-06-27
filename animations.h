@@ -51,7 +51,7 @@ void rfill ( byte, int16_t*, int16_t, byte, byte*, int16_t*, int16_t*, int16_t*,
 void random_fade(byte, int16_t*, int16_t, byte, byte*, int16_t*, int16_t, int16_t, byte*, int16_t*, byte, int16_t, int16_t* );
 void wave(byte, int16_t*, byte, float*, int16_t*, float*, float*, int16_t*, byte*, byte*, int16_t*, byte*, unsigned long*, byte);
 void lines( byte, int16_t*, int16_t, byte*, short*, short*, byte, byte, byte );
-void chaser(byte, int16_t, int16_t*, byte, byte*, byte*, byte, byte*, byte*, byte*, byte*, short*, short*, int16_t*, byte*, int16_t*, unsigned long*, int16_t );
+void chaser(byte, int16_t, int16_t*, byte, byte*, byte*, byte, byte*, byte*, byte*, byte*, short*, short*, int16_t*, byte*, int16_t*, unsigned long*, int16_t, byte*, byte*, byte, byte, byte );
 void light_sense( byte, int16_t*, int16_t, int16_t*, byte*, byte*, volatile byte*, byte*, byte*, byte*, int16_t*, int16_t*, unsigned long*, int16_t*, byte*, byte*, byte, int16_t, byte);
 void text_scroll(byte, String, byte, byte, int16_t*, int16_t, int16_t, int16_t*, byte, byte );
 void sprite_animate (byte, int16_t, int16_t*, byte, int16_t, byte*, unsigned long* );

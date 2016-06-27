@@ -125,7 +125,7 @@ animation_number        animation
 19						pong / breakout
 
 
-TODO:  general code cleanup, updated animations
+TODO:  general code clean up, updated animations
  
  */
 
@@ -137,12 +137,12 @@ TODO:  general code cleanup, updated animations
 // control overall flow of pgm
 byte cycle = 0;          	   // set to 1 to cycle though animations at 15s in interval, or 0 to stay on current animation until cycle button is pressed on table
 int cycle_time = 7500;	       // time in ms to wait between switching to next animation in sequence
-const byte debug = 1;          // set to 1 to get serial data out for debug
+const byte debug = 0;          // set to 1 to get serial data out for debug
 const byte bluetooth = 1;	   // set to 1 to enable BT shield
 byte cal = 0;            	   // set to 0 to turn off calibration for other debug so we don't run it all the damn time, 1 = force cal always, 2 = check for dark room first
 const byte shade_limit = 6;    // "grayscale" shades for each color
 const byte code_array[14] = { 0, 0, 1, 1, 2, 3, 2, 3, 4, 5, 4, 5, 6, 7};
-byte animation_sequence[18] = {0, 1, 2, 3, 5, 6, 7, 8, 9, 19, 15, 16, 17, 99, 14, 99, 0, 99};	// sequence of animations that pressing button or cycling will cycle through
+byte animation_sequence[18] = {0, 8, 99, 3, 5, 6, 7, 8, 9, 19, 15, 16, 17, 99, 14, 99, 0, 99};	// sequence of animations that pressing button or cycling will cycle through
 byte controller_plugged = 0;   // global for whether or not controller is plugged into port
 
 // static defines
@@ -626,7 +626,7 @@ void setup()  {
   // ******************************************************************************************************************************
   // TC1 channel 0 will be used for controller input polling and response
   // will use a clock divide of 8 to get down to 10.5MHz (0.0952us period)
-  // then count up 131k ticks to get us a 12.5ms ( roughtly 80/s interval ) to poll the controller inputs
+  // then count up 131k ticks to get us a 12.5ms ( roughly 80/s interval ) to poll the controller inputs
   // can make this longer if we want to but 80/s sounds good
 
   // found code online, hopefully can muddle through it
@@ -873,7 +873,7 @@ void loop()  {
 			break;
 		case 8:
 			// led chaser
-			chaser(random_type, ledCount, display_mem, nes_state1, &dir, &time_chaser_cycle, chaser_cycle, &last_x0, &last_y0, &last_x1, &last_y1, cur_x, cur_y, fade_color, &random_type, &animation_interval, &previousSenseMillis, fade_color_interval);
+			chaser(random_type, ledCount, display_mem, nes_state1, &dir, &time_chaser_cycle, chaser_cycle, &last_x0, &last_y0, &last_x1, &last_y1, cur_x, cur_y, fade_color, &random_type, &animation_interval, &previousSenseMillis, fade_color_interval, &dir_count0, &dir_count1, dir_threshold0, dir_threshold1, debug);
 			break;
 		case 9:
 			// light sense using IR array
@@ -1398,14 +1398,18 @@ void next_animation(byte switchto) {
 
 		// chaser
 		nes_on();
-		random_type = random(0, 9);
-		//random_type = 4;
+		random_type = random(0, 10);
+		random_type = 8;
 		previousSenseMillis = millis();
 		cur_x[0] = 0;
 		cur_y[0] = 0;
 		cur_x[1] = 0;
 		cur_y[1] = 0;
 		dir = 0;
+		dir_count0 = 0;
+		dir_count1 = 0;
+		dir_threshold0 = random(2, 10);
+		dir_threshold1 = random(2, 10);
 		fade_color[0] = random(1, 512);
 		fade_color[1] = random(1, 512);
 		animation_interval = 10;
@@ -1542,7 +1546,7 @@ void next_animation(byte switchto) {
 		
 		foodmode = 0;  // one pellet mode
 		newFood(snake1, snake2, snakeLength, &food1, &food2, foodmode, 0 );
-		animation_interval = 100;
+		animation_interval = 50;
 		animation_name = "snake";
 		break;
 		
@@ -2385,6 +2389,10 @@ void USART0status() {
 // setup for BT module, hopefully less complicated than the wifi since it's just being treated as a serial connection
 void BTconfig(byte debug)
 {
+
+  if (debug == 1) {
+	Serial.println("Config BT....");
+  }
 	
   // serial1 (USART0) used for BT communication, initialize it and set up connection to BT module
   Serial1.begin(38400); 
@@ -2397,7 +2405,11 @@ void BTconfig(byte debug)
   
   if (Serial1.available() > 0 ) {
 	  int data = Serial1.read();
-	  if( data > 0 && debug == 1 ) Serial.print((char)data);
+	  if( data > 0 && debug == 1 ) {
+		  Serial.println("data from bt!");
+		  Serial.println(data);
+		  Serial.print((char)data);
+	  }
   }
   
   //bluetooth.print("\r\n+STAUTO=1\r\n");  // set to auto pair  Serial.begin(38400);
