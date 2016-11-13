@@ -100,6 +100,7 @@
  08.08:	added pulldown on nes1 port for presence detect, if no controller is plugged, read 0
 		also added bt ommunication back to phone to tell it current animation, can use this for other stuff as well eventually
  01.09: HNY added voter for upcoming shower
+ 07.04: updates to chaser
  
 animation_number        animation
 0                       nes_paint
@@ -423,10 +424,13 @@ byte stopwatch_running = 0;
 byte dir = 0;
 byte time_chaser_cycle = 0;
 byte chaser_cycle = 1;
-byte last_x0 = 0;
-byte last_y0 = 0;
-byte last_x1 = 0;
-byte last_y1 = 0;
+byte last_x[3] = {0,0,0};
+byte last_y[3] = {0,0,0};
+byte dir_count[3] = {0,0,0};
+byte dir_threshold[3] = {2,2,2};
+byte x_mode[3] = {0,0,0};
+byte y_mode[3] = {0,0,0};
+
 
 // variables for tetris
 byte partloc_x = partstart_x;       // x and y location of of current piece
@@ -873,7 +877,7 @@ void loop()  {
 			break;
 		case 8:
 			// led chaser
-			chaser(random_type, ledCount, display_mem, nes_state1, &dir, &time_chaser_cycle, chaser_cycle, &last_x0, &last_y0, &last_x1, &last_y1, cur_x, cur_y, fade_color, &random_type, &animation_interval, &previousSenseMillis, fade_color_interval, &dir_count0, &dir_count1, dir_threshold0, dir_threshold1, debug);
+			chaser(random_type, ledCount, display_mem, nes_state1, &dir, &time_chaser_cycle, chaser_cycle, last_x, last_y, cur_x, cur_y, fade_color, &random_type, &animation_interval, &previousSenseMillis, fade_color_interval, dir_count, dir_threshold, x_mode, y_mode, debug);
 			break;
 		case 9:
 			// light sense using IR array
@@ -942,7 +946,7 @@ void loop()  {
       }*/
 
     
-    if(debug == 3 ){
+    if(debug == 2 ){
       Serial.print( animation_sequence[animation_number] );
 
       Serial.print( "NES controller0 state:  " );
@@ -1399,19 +1403,16 @@ void next_animation(byte switchto) {
 		// chaser
 		nes_on();
 		random_type = random(0, 10);
-		random_type = 8;
 		previousSenseMillis = millis();
-		cur_x[0] = 0;
-		cur_y[0] = 0;
-		cur_x[1] = 0;
-		cur_y[1] = 0;
-		dir = 0;
-		dir_count0 = 0;
-		dir_count1 = 0;
-		dir_threshold0 = random(2, 10);
-		dir_threshold1 = random(2, 10);
-		fade_color[0] = random(1, 512);
-		fade_color[1] = random(1, 512);
+		for ( byte i=0; i<3; i++) {
+			cur_x[i] = 0;
+			cur_y[i] = 0;
+			dir_count[i] = 0;
+			dir_threshold[i] = random(2, 7);
+			x_mode[i] = 0;
+			y_mode[i] = 0;
+			fade_color[i] = random(1, 512);	
+		}
 		animation_interval = 10;
 		animation_name = "chaser";
 		break;
